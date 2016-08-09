@@ -2657,7 +2657,7 @@ class DAG(LoggingMixin):
                 if ti.state in State.unfinished()))
 
         for run in active_runs:
-            self.logger.info("Checking state for {}".format(run))
+            # self.logger.info("Checking state for {}".format(run))
 
             tis = [
                 t for t in task_instances
@@ -2672,14 +2672,14 @@ class DAG(LoggingMixin):
                 if any(
                         r.state in (State.FAILED,  State.UPSTREAM_FAILED)
                         for r in roots):
-                    self.logger.info('Marking run {} failed'.format(run))
+                    # self.logger.info('Marking run {} failed'.format(run))
                     run.state = State.FAILED
 
                 # if all roots succeeded, the run succeeded
                 elif all(
                         r.state in (State.SUCCESS, State.SKIPPED)
                         for r in roots):
-                    self.logger.info('Marking run {} successful'.format(run))
+                    # self.logger.info('Marking run {} successful'.format(run))
                     run.state = State.SUCCESS
 
                 # if *the individual dagrun* is deadlocked, the run failed
@@ -2692,14 +2692,14 @@ class DAG(LoggingMixin):
                         # AND none of their dependencies are met
                         all(not t.are_dependencies_met() for t in tis
                             if t.state in State.unfinished())):
-                    self.logger.info(
-                        'Deadlock; marking run {} failed'.format(run))
+                    # self.logger.info(
+                    #     'Deadlock; marking run {} failed'.format(run))
                     run.state = State.FAILED
 
                 # if *ALL* dagruns are deadlocked, the run failed
                 elif all_deadlocked:
-                    self.logger.info(
-                        'Deadlock; marking run {} failed'.format(run))
+                    # self.logger.info(
+                    #     'Deadlock; marking run {} failed'.format(run))
                     run.state = State.FAILED
 
                 # finally, if the roots aren't done, the dag is still running

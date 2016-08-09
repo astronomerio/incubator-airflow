@@ -333,7 +333,7 @@ class SchedulerJob(BaseJob):
             notification_sent = False
             if dag.sla_miss_callback:
                 # Execute the alert callback
-                self.logger.info(' --------------> ABOUT TO CALL SLA MISS CALL BACK ')
+                # self.logger.info(' --------------> ABOUT TO CALL SLA MISS CALL BACK ')
                 dag.sla_miss_callback(dag, task_list, blocking_task_list, slas, blocking_tis)
                 notification_sent = True
             email_content = """\
@@ -495,7 +495,7 @@ class SchedulerJob(BaseJob):
 
         active_runs = dag.get_active_runs()
 
-        self.logger.info('Getting list of tasks to skip for active runs.')
+        # self.logger.info('Getting list of tasks to skip for active runs.')
         skip_tis = set()
         if active_runs:
             qry = (
@@ -510,8 +510,8 @@ class SchedulerJob(BaseJob):
 
         descartes = [obj for obj in product(dag.tasks, active_runs)]
         could_not_run = set()
-        self.logger.info('Checking dependencies on {} tasks instances, minus {} '
-                     'skippable ones'.format(len(descartes), len(skip_tis)))
+        # self.logger.info('Checking dependencies on {} tasks instances, minus {} '
+        #              'skippable ones'.format(len(descartes), len(skip_tis)))
 
         for task, dttm in descartes:
             if task.adhoc or (task.task_id, dttm) in skip_tis:
@@ -523,19 +523,19 @@ class SchedulerJob(BaseJob):
                     State.RUNNING, State.QUEUED, State.SUCCESS, State.FAILED):
                 continue
             elif ti.is_runnable(flag_upstream_failed=True):
-                self.logger.debug('Queuing task: {}'.format(ti))
+                # self.logger.debug('Queuing task: {}'.format(ti))
                 queue.put((ti.key, pickle_id))
             elif ti.is_premature():
                 continue
             else:
-                self.logger.debug('Adding task: {} to the COULD_NOT_RUN set'.format(ti))
+                # self.logger.debug('Adding task: {} to the COULD_NOT_RUN set'.format(ti))
                 could_not_run.add(ti)
 
         # this type of deadlock happens when dagruns can't even start and so
         # the TI's haven't been persisted to the     database.
         if len(could_not_run) == len(descartes) and len(could_not_run) > 0:
-            self.logger.error(
-                'Dag runs are deadlocked for DAG: {}'.format(dag.dag_id))
+            # self.logger.error(
+            #     'Dag runs are deadlocked for DAG: {}'.format(dag.dag_id))
             (session
                 .query(models.DagRun)
                 .filter(
@@ -547,7 +547,7 @@ class SchedulerJob(BaseJob):
                     synchronize_session='fetch'))
 
         # Releasing the lock
-        self.logger.debug("Unlocking DAG (scheduler_lock)")
+        # self.logger.debug("Unlocking DAG (scheduler_lock)")
         db_dag = (
             session.query(DagModel)
             .filter(DagModel.dag_id == dag.dag_id)
@@ -660,7 +660,7 @@ class SchedulerJob(BaseJob):
         Iterates over the dags and schedules and processes them
         """
         for dag in dags:
-            self.logger.debug("Scheduling {}".format(dag.dag_id))
+            # self.logger.debug("Scheduling {}".format(dag.dag_id))
             dag = dagbag.get_dag(dag.dag_id)
             if not dag:
                 continue
