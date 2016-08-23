@@ -669,8 +669,7 @@ class SchedulerJob(BaseJob):
                 self.process_dag(dag, tis_out)
                 self.manage_slas(dag)
             except Exception as e:
-                pass
-                # self.logger.exception(e)
+                self.logger.exception(e)
 
     def _execute(self):
         TI = models.TaskInstance
