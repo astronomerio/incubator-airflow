@@ -23,6 +23,9 @@ elif _EXECUTOR == 'SequentialExecutor':
 elif _EXECUTOR == 'MesosExecutor':
     from airflow.contrib.executors.mesos_executor import MesosExecutor
     DEFAULT_EXECUTOR = MesosExecutor()
+elif _EXECUTOR == 'AstronomerMesosExecutor':
+    from airflow.contrib.executors.astronomer_mesos_executor import AstronomerMesosExecutor
+    DEFAULT_EXECUTOR = AstronomerMesosExecutor()
 else:
     # Loading plugins
     from airflow.plugins_manager import executors as _executors
