@@ -25,6 +25,11 @@ def get_framework_name():
         return DEFAULT_FRAMEWORK_NAME
     return configuration.get('mesos', 'FRAMEWORK_NAME')
 
+def copy_env_var(command, env_var_name):
+    env_var = command.environment.variables.add()
+    env_var.name = env_var_name
+    env_var.value = os.getenv(env_var_name, '')
+
 
 # AirflowMesosScheduler, implements Mesos Scheduler interface
 # To schedule airflow jobs on mesos
@@ -155,9 +160,10 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
                 command = mesos_pb2.CommandInfo()
                 command.value = cmd
 
-                pg_env = command.environment.variables.add()
-                pg_env.name = "AIRFLOW__CORE__SQL_ALCHEMY_CONN"
-                pg_env.value = os.getenv('AIRFLOW__CORE__SQL_ALCHEMY_CONN', '')
+                # Copy some environemnt vars from scheduler to execution docker container
+                copy_env_var(command, "AIRFLOW__CORE__SQL_ALCHEMY_CONN")
+                copy_env_var(command, "AWS_ACCESS_KEY_ID")
+                copy_env_var(command, "AWS_SECRET_ACCESS_KEY")
 
                 task.command.MergeFrom(command)
                 tasks.append(task)
