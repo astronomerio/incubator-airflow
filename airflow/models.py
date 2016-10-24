@@ -2920,14 +2920,18 @@ class DAG(LoggingMixin):
         if dag and dag.pickle_id:
             dp = session.query(DagPickle).filter(
                 DagPickle.id == dag.pickle_id).first()
-        if not dp or dp.pickle != self:
+        if dp:
+            logging.info("found dp")               
+        if not dp or dp.pickle.__dict__ != self.__dict__:
+            logging.info("creating fresh pickle")
             dp = DagPickle(dag=self)
             session.add(dp)
-            self.last_pickled = datetime.now()
+            session.flush()
+            dag.last_pickled = datetime.now()
+            dag.pickle_id = dp.id
             session.commit()
-            self.pickle_id = dp.id
 
-        return dp
+        return dp        
 
     def tree_view(self):
         """
