@@ -19,7 +19,6 @@ from airflow.executors.base_executor import BaseExecutor
 from airflow.settings import Session
 from airflow.utils.state import State
 from airflow.exceptions import AirflowException
-from astronomer_tasks import Task
 
 _log = logging.getLogger(__name__)
 
