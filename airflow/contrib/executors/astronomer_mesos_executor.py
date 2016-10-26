@@ -34,9 +34,9 @@ class Task(object):
     _ids = count(0)
 
     def __init__(self, **kwargs):
-        self.state = kwargs.get("state") or mesos_pb2.TASK_STAGING
-        self.created = kwargs.get("created") or str(datetime.utcnow())
-        self.updated = kwargs.get("updated") or "NA"
+        self.state = kwargs.get("state") or None
+        self.created = kwargs.get("created") or datetime.utcnow()
+        self.updated = kwargs.get("updated") or datetime.utcnow()
         self.key = kwargs.get("key") or None
         self.cmd = kwargs.get("cmd") or ""
         self.task_id = str(self._ids.next())
@@ -45,6 +45,7 @@ class Task(object):
         self.cpus = configuration.getint('mesos', 'TASK_CPU') or 1
         self.mem = configuration.getint('mesos', 'TASK_MEMORY') or 256
         self.clean = True
+        self.backoff_iteration = 1
 
     def __repr__(self):
         return "Task({} {})".format(self.task_id, self.key)
@@ -113,14 +114,35 @@ class Task(object):
                               mesos_pb2.TASK_STARTING,
                               mesos_pb2.TASK_RUNNING)
 
+    def old(self):
+        return ((datetime.utcnow() - self.updated).total_seconds() > 2**self.backoff_iteration)
+
     def update(self, update):
         _log.info("Updating status of %s from %s to %s",
                   self,
                   mesos_pb2.TaskState.Name(self.state),
                   mesos_pb2.TaskState.Name(update.state))
-        self.updated = str(datetime.utcnow())
         self.state = update.state
+        self.touch()
+        self.make_clean()
+
+    def touch(self):
+        self.updated = datetime.utcnow()
+
+    def make_dirty(self):
+        if self.clean:
+            self.backoff_iteration = 2
+        else:
+            self.backoff_iteration += 1
+
+        if self.backoff_iteration > 8
+            self.task_id = None
+
+        self.clean = False
+
+    def make_clean(self):
         self.clean = True
+        self.backoff_iteration = 5
 
     def get_task_status(self):
         task_status = mesos_pb2.TaskStatus()
@@ -159,18 +181,22 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
     def _task(self, taskId):
         return self.tasks.get(taskId)
 
-    def triggerResync(self, driver, agentId=None):
+    def makeOldTasksDirty(self, driver):
+        for task in self.tasks.itervalues():
+                if not task.running() and task.old():
+                    task.make_dirty()
+        self.triggerResync(driver)
+
+    def makeTasksDirty(self, driver, agentId=None):
         for task in self.tasks.itervalues():
                 if task.running() and (not agentId or task.agent_id == agentId):
-                    task.clean = False
+                    task.make_dirty()
+        self.triggerResync(driver)
 
+    def triggerResync(self, driver):
         unclean_task_statuses = [task.get_task_status() for task in self.tasks.itervalues() if not task.clean]
 
-        if not unclean_task_statuses:
-            _log.info("No running tasks, assume sync'd. Triggering implicit reconciliation.")
-            self.syncd = True
-            driver.reconcileTasks([])
-        else:
+        if unclean_task_statuses:
             _log.info("Triggering explicit reconciliation.")
             self.syncd = False
             driver.reconcileTasks(unclean_task_statuses)
@@ -198,13 +224,14 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
 
     def reregistered(self, driver, masterInfo):
         _log.info("AirflowScheduler re-registered to mesos")
-        self.triggerResync(driver)
+        self.makeTasksDirty(driver)
 
     def disconnected(self, driver):
         _log.info("AirflowScheduler disconnected from mesos")
 
     def offerRescinded(self, driver, offerId):
         _log.info("AirflowScheduler offer %s rescinded", str(offerId))
+        self.makeTasksDirty(driver)
 
     def frameworkMessage(self, driver, executorId, slaveId, message):
         _log.info("AirflowScheduler received framework message %s", message)
@@ -214,7 +241,7 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
 
     def slaveLost(self, driver, slaveId):
         _log.warning("AirflowScheduler slave %s lost", str(slaveId))
-        self.triggerResync(driver, slaveId)
+        self.makeTasksDirty(driver, slaveId)
 
     def error(self, driver, message):
         _log.error("AirflowScheduler driver aborted %s", message)
@@ -224,13 +251,9 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
     def resourceOffers(self, driver, offers):
         if self.syncd is None:
             _log.debug("Scheduler is not yet sync'd - triggering a resync")
-            self.triggerResync(driver)
+            self.makeTasksDirty(driver)
 
-        # if not self.syncd:
-        #     _log.debug("Scheduler has not yet sync'd")
-        #     for offer in offers:
-        #         driver.declineOffer(offer.id)
-        #     return
+        self.makeOldTasksDirty(driver)
 
         for offer in offers:
             offerCpus = 0
@@ -270,6 +293,7 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
             
             operations = []
             for task in tasks:
+                task.touch()
                 mesos_task = task.as_mesos_task(offer.slave_id.value)
                 operation = mesos_pb2.Offer.Operation()
                 operation.launch.task_infos.extend([mesos_task])
