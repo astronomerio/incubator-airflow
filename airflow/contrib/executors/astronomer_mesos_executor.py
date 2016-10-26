@@ -1,10 +1,14 @@
+#!/usr/bin/env python
+
 import os
+from threading import Lock
 
 from future import standard_library
 standard_library.install_aliases()
 from builtins import str
+from datetime import datetime
+from itertools import count
 import logging
-from queue import Queue
 
 import mesos.interface
 from mesos.interface import mesos_pb2
@@ -16,46 +20,163 @@ from airflow.settings import Session
 from airflow.utils.state import State
 from airflow.exceptions import AirflowException
 
+_log = logging.getLogger(__name__)
+
 DEFAULT_FRAMEWORK_NAME = 'Airflow'
 FRAMEWORK_CONNID_PREFIX = 'mesos_framework_'
-
-
-def get_framework_name():
-    if not configuration.get('mesos', 'FRAMEWORK_NAME'):
-        return DEFAULT_FRAMEWORK_NAME
-    return configuration.get('mesos', 'FRAMEWORK_NAME')
 
 def copy_env_var(command, env_var_name):
     env_var = command.environment.variables.add()
     env_var.name = env_var_name
     env_var.value = os.getenv(env_var_name, '')
 
+class Task(object):
+    _ids = count(0)
 
-# AirflowMesosScheduler, implements Mesos Scheduler interface
-# To schedule airflow jobs on mesos
+    def __init__(self, **kwargs):
+        self.state = kwargs.get("state") or mesos_pb2.TASK_STAGING
+        self.created = kwargs.get("created") or str(datetime.utcnow())
+        self.updated = kwargs.get("updated") or "NA"
+        self.key = kwargs.get("key") or None
+        self.cmd = kwargs.get("cmd") or ""
+        self.task_id = str(self._ids.next())
+        self.agent_id = kwargs.get("agent_id") or None
+        
+        self.cpus = configuration.getint('mesos', 'TASK_CPU') or 1
+        self.mem = configuration.getint('mesos', 'TASK_MEMORY') or 256
+        self.clean = True
+
+    def __repr__(self):
+        return "Task({} {})".format(self.task_id, self.key)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def as_mesos_task(self, agent_id):
+        task = mesos_pb2.TaskInfo()
+        task.task_id.value = self.task_id
+        task.slave_id.value = agent_id
+        task.name = "AirflowTask {} {}".format(self.task_id, self.key)
+
+        cpus = task.resources.add()
+        cpus.name = "cpus"
+        cpus.type = mesos_pb2.Value.SCALAR
+        cpus.scalar.value = self.cpus
+
+        mem = task.resources.add()
+        mem.name = "mem"
+        mem.type = mesos_pb2.Value.SCALAR
+        mem.scalar.value = self.mem
+
+        container = mesos_pb2.ContainerInfo()
+        container.type = 1 # mesos_pb2.ContainerInfo.Type.DOCKER
+        volume = container.volumes.add()
+        volume.host_path = "/airflow/logs"
+        volume.container_path = "/airflow/logs"
+        volume.mode = 1 # mesos_pb2.Volume.Mode.RW
+
+        volume = container.volumes.add()
+        volume.host_path = "/var/run/docker.sock"
+        volume.container_path = "/var/run/docker.sock"
+        volume.mode = 1 # mesos_pb2.Volume.Mode.RW
+
+        docker = mesos_pb2.ContainerInfo.DockerInfo()
+        docker.image = "astronomerio/airflow"
+        docker.force_pull_image = True
+
+        container.docker.MergeFrom(docker)
+        task.container.MergeFrom(container)
+
+        command = mesos_pb2.CommandInfo()
+        command.value = self.cmd
+
+        # Copy some environemnt vars from scheduler to execution docker container
+        copy_env_var(command, "AIRFLOW__CORE__SQL_ALCHEMY_CONN")
+        copy_env_var(command, "AWS_ACCESS_KEY_ID")
+        copy_env_var(command, "AWS_SECRET_ACCESS_KEY")
+
+        task.command.MergeFrom(command)
+
+        return task
+
+    def failed(self):
+        return self.state in (mesos_pb2.TASK_LOST,
+                              mesos_pb2.TASK_ERROR,
+                              mesos_pb2.TASK_KILLED,
+                              mesos_pb2.TASK_FAILED)
+
+    def finished(self):
+        return self.state == mesos_pb2.TASK_FINISHED
+
+    def running(self):
+        return self.state in (mesos_pb2.TASK_STAGING,
+                              mesos_pb2.TASK_STARTING,
+                              mesos_pb2.TASK_RUNNING)
+
+    def update(self, update):
+        _log.info("Updating status of %s from %s to %s",
+                  self,
+                  mesos_pb2.TaskState.Name(self.state),
+                  mesos_pb2.TaskState.Name(update.state))
+        self.updated = str(datetime.utcnow())
+        self.state = update.state
+        self.clean = True
+
+    def get_task_status(self):
+        task_status = mesos_pb2.TaskStatus()
+        task_status.slave_id.value = self.agent_id
+        task_status.task_id.value = self.task_id
+        task_status.state = self.state
+        return task_status
+
+    def to_dict(self):
+        task_dict = {
+            "task_id": self.task_id,
+            "state": self.state,
+            "created": self.created,
+            "updated": self.updated
+        }
+        return task_dict
+
+    @classmethod
+    def from_dict(cls, task_dict):
+        task = cls(**task_dict)
+        task.clean = not task.running()
+        return task
+
 class AirflowMesosScheduler(mesos.interface.Scheduler):
-    """
-    Airflow Mesos scheduler implements mesos scheduler interface
-    to schedule airflow tasks on mesos.
-    Basically, it schedules a command like
-    'airflow run <dag_id> <task_instance_id> <start_date> --local -p=<pickle>'
-    to run on a mesos slave.
-    """
-
-    def __init__(self,
-                 task_queue,
-                 result_queue,
-                 task_cpu=1,
-                 task_mem=512):
+    def __init__(self, task_queue, task_mutex, result_queue, result_mutex):
         self.task_queue = task_queue
+        self.task_mutex = task_mutex
         self.result_queue = result_queue
-        self.task_cpu = task_cpu
-        self.task_mem = task_mem
-        self.task_counter = 0
-        self.task_key_map = {}
+        self.result_mutex = result_mutex
+        self.syncd = None
+        self.tasks = {}
+
+    def __repr__(self):
+        return "AirflowMesosScheduler"
+
+    def _task(self, taskId):
+        return self.tasks.get(taskId)
+
+    def triggerResync(self, driver, agentId=None):
+        for task in self.tasks.itervalues():
+                if task.running() and (not agentId or task.agent_id == agentId):
+                    task.clean = False
+
+        unclean_task_statuses = [task.get_task_status() for task in self.tasks.itervalues() if not task.clean]
+
+        if not unclean_task_statuses:
+            _log.info("No running tasks, assume sync'd. Triggering implicit reconciliation.")
+            self.syncd = True
+            driver.reconcileTasks([])
+        else:
+            _log.info("Triggering explicit reconciliation.")
+            self.syncd = False
+            driver.reconcileTasks(unclean_task_statuses)
 
     def registered(self, driver, frameworkId, masterInfo):
-        logging.info("AirflowScheduler registered to mesos with framework ID %s", frameworkId.value)
+        _log.info("AirflowMesosScheduler registered to mesos with framework ID %s", frameworkId.value)
 
         if configuration.getboolean('mesos', 'CHECKPOINT') and configuration.get('mesos', 'FAILOVER_TIMEOUT'):
             # Import here to work around a circular import error
@@ -63,7 +184,7 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
 
             # Update the Framework ID in the database.
             session = Session()
-            conn_id = FRAMEWORK_CONNID_PREFIX + get_framework_name()
+            conn_id = FRAMEWORK_CONNID_PREFIX + DEFAULT_FRAMEWORK_NAME
             connection = Session.query(Connection).filter_by(conn_id=conn_id).first()
             if connection is None:
                 connection = Connection(conn_id=conn_id, conn_type='mesos_framework-id',
@@ -76,30 +197,42 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
             Session.remove()
 
     def reregistered(self, driver, masterInfo):
-        logging.info("AirflowScheduler re-registered to mesos")
+        _log.info("AirflowScheduler re-registered to mesos")
+        self.triggerResync(driver)
 
     def disconnected(self, driver):
-        logging.info("AirflowScheduler disconnected from mesos")
+        _log.info("AirflowScheduler disconnected from mesos")
 
     def offerRescinded(self, driver, offerId):
-        logging.info("AirflowScheduler offer %s rescinded", str(offerId))
+        _log.info("AirflowScheduler offer %s rescinded", str(offerId))
 
     def frameworkMessage(self, driver, executorId, slaveId, message):
-        logging.info("AirflowScheduler received framework message %s", message)
+        _log.info("AirflowScheduler received framework message %s", message)
 
     def executorLost(self, driver, executorId, slaveId, status):
-        logging.warning("AirflowScheduler executor %s lost", str(executorId))
+        _log.warning("AirflowScheduler executor %s lost", str(executorId))
 
     def slaveLost(self, driver, slaveId):
-        logging.warning("AirflowScheduler slave %s lost", str(slaveId))
+        _log.warning("AirflowScheduler slave %s lost", str(slaveId))
+        self.triggerResync(driver, slaveId)
 
     def error(self, driver, message):
-        logging.error("AirflowScheduler driver aborted %s", message)
+        _log.error("AirflowScheduler driver aborted %s", message)
         raise AirflowException("AirflowScheduler driver aborted %s" % message)
+        #os._exit(1)
 
     def resourceOffers(self, driver, offers):
+        if self.syncd is None:
+            _log.debug("Scheduler is not yet sync'd - triggering a resync")
+            self.triggerResync(driver)
+
+        # if not self.syncd:
+        #     _log.debug("Scheduler has not yet sync'd")
+        #     for offer in offers:
+        #         driver.declineOffer(offer.id)
+        #     return
+
         for offer in offers:
-            tasks = []
             offerCpus = 0
             offerMem = 0
             for resource in offer.resources:
@@ -108,136 +241,109 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
                 elif resource.name == "mem":
                     offerMem += resource.scalar.value
 
-            logging.info("Received offer %s with cpus: %s and mem: %s", offer.id.value, offerCpus, offerMem)
+            _log.info("Received offer from %s with cpus: %s and mem: %s", offer.slave_id.value[-8:], offerCpus, offerMem)
 
-            remainingCpus = offerCpus
-            remainingMem = offerMem
+            tasks = []
+            i = 0
 
-            while (not self.task_queue.empty()) and \
-                  remainingCpus >= self.task_cpu and \
-                  remainingMem >= self.task_mem:
-                key, cmd = self.task_queue.get()
-                tid = self.task_counter
-                self.task_counter += 1
-                self.task_key_map[str(tid)] = key
+            self.task_mutex.acquire()
+            try:
+                while offerCpus > 0 and offerMem > 0 and i < len(self.task_queue):
+                    task = self.task_queue[i]
+                    if task.cpus <= offerCpus and task.mem <= offerMem:
+                        self.task_queue.pop(i)
+                        task.agent_id = offer.slave_id.value;
+                        tasks.append(task)
+                        self.tasks[task.task_id] = task
+                        offerCpus -= task.cpus
+                        offerMem -= task.mem
+                    i += 1
+            finally:
+                self.task_mutex.release()
 
-                logging.info("Launching task %d using offer %s", tid, offer.id.value)
+            if not tasks:
+                _log.debug("Declining offer - no tasks to schedule")
+                driver.declineOffer(offer.id)
+                continue
 
-                task = mesos_pb2.TaskInfo()
-                task.task_id.value = str(tid)
-                task.slave_id.value = offer.slave_id.value
-                task.name = "AirflowTask %d" % tid
-
-                cpus = task.resources.add()
-                cpus.name = "cpus"
-                cpus.type = mesos_pb2.Value.SCALAR
-                cpus.scalar.value = self.task_cpu
-
-                mem = task.resources.add()
-                mem.name = "mem"
-                mem.type = mesos_pb2.Value.SCALAR
-                mem.scalar.value = self.task_mem
-
-                container = mesos_pb2.ContainerInfo()
-                container.type = 1 # mesos_pb2.ContainerInfo.Type.DOCKER
-                volume = container.volumes.add()
-                volume.host_path = "/airflow/logs"
-                volume.container_path = "/airflow/logs"
-                volume.mode = 1 # mesos_pb2.Volume.Mode.RW
-
-                volume = container.volumes.add()
-                volume.host_path = "/var/run/docker.sock"
-                volume.container_path = "/var/run/docker.sock"
-                volume.mode = 1 # mesos_pb2.Volume.Mode.RW
-
-                docker = mesos_pb2.ContainerInfo.DockerInfo()
-                docker.image = "astronomerio/airflow"
-                docker.force_pull_image = True
-
-                container.docker.MergeFrom(docker)
-                task.container.MergeFrom(container)
-
-                command = mesos_pb2.CommandInfo()
-                command.value = cmd
-
-                # Copy some environemnt vars from scheduler to execution docker container
-                copy_env_var(command, "AIRFLOW__CORE__SQL_ALCHEMY_CONN")
-                copy_env_var(command, "AWS_ACCESS_KEY_ID")
-                copy_env_var(command, "AWS_SECRET_ACCESS_KEY")
-
-                task.command.MergeFrom(command)
-                tasks.append(task)
-
-                remainingCpus -= self.task_cpu
-                remainingMem -= self.task_mem
-
-            driver.launchTasks(offer.id, tasks)
+            _log.info("Launching Tasks %s", tasks)
+            
+            operations = []
+            for task in tasks:
+                mesos_task = task.as_mesos_task(offer.slave_id.value)
+                operation = mesos_pb2.Offer.Operation()
+                operation.launch.task_infos.extend([mesos_task])
+                operation.type = mesos_pb2.Offer.Operation.LAUNCH
+                operations.append(operation)
+            
+            driver.acceptOffers([offer.id], operations)
 
     def statusUpdate(self, driver, update):
-        logging.info("Task %s is in state %s, data %s",
-                     update.task_id.value, mesos_pb2.TaskState.Name(update.state), str(update.data))
-
-        try:
-            key = self.task_key_map[update.task_id.value]
-        except KeyError:
-            # The map may not contain an item if the framework re-registered after a failover.
-            # Discard these tasks.
-            logging.warn("Unrecognised task key %s" % update.task_id.value)
+        task = self._task(update.task_id.value)
+        if not task or task.task_id != update.task_id.value:
+            if update.state == mesos_pb2.TASK_RUNNING:
+                _log.info("Killing unrecognized task: %s", update.task_id.value)
+                driver.killTask(update.task_id)
+            else:
+                _log.info("Ignoring update from unrecognized stopped task.")
             return
 
-        #XXX: Sometimes we get into a situation where task_queue.task_done()
-        # throws errors. Could be due to some unhandled event we should be taking
-        # care of somewhere else. Less likely, could be due to an issue where Queue.put isn't
-        # properly locking.  Either way, just ignore for now.
-        try:
-            if update.state == mesos_pb2.TASK_FINISHED:
-                self.result_queue.put((key, State.SUCCESS))
-                self.task_queue.task_done()
+        _log.debug("TASK_UPDATE - %s: %s on Slave %s",
+                   mesos_pb2.TaskState.Name(update.state),
+                   task,
+                   update.slave_id.value[-7:])
 
-            if update.state == mesos_pb2.TASK_LOST or \
-               update.state == mesos_pb2.TASK_KILLED or \
-               update.state == mesos_pb2.TASK_FAILED:
-                self.result_queue.put((key, State.FAILED))
-                self.task_queue.task_done()
-        except ValueError:
-            logging.warn("Error marking task_done")
+        task.update(update)
 
+        if not task.running():
+            self.result_mutex.acquire()
+            try:
+                if task.failed():
+                    _log.error("\t%s is in failed state %s with message '%s'",
+                                task, mesos_pb2.TaskState.Name(update.state), update.message)
+                    _log.error("\tData:  %s", repr(str(update.data)))
+                    _log.error("\tSent by: %s", mesos_pb2.TaskStatus.Source.Name(update.source))
+                    _log.error("\tReason: %s", mesos_pb2.TaskStatus.Reason.Name(update.reason))
+                    _log.error("\tMessage: %s", update.message)
+                    _log.error("\tHealthy: %s", update.healthy)
+                    self.result_queue.append((task.key, State.FAILED))
+                else:
+                    _log.debug("%s ended successfully with message '%s'", task, update.message)
+                    self.result_queue.append((task.key, State.SUCCESS))
+            finally:
+                self.result_mutex.release()
+
+            del self.tasks[task.task_id]
+
+        if not self.syncd and all(task.clean for task in self.tasks.values()):
+            _log.debug("Agent is now sync'd - perform full reconcile to tidy up old tasks")
+            self.syncd = True
+            driver.reconcileTasks([])
 
 class AstronomerMesosExecutor(BaseExecutor):
-    """
-    MesosExecutor allows distributing the execution of task
-    instances to multiple mesos workers.
-
-    Apache Mesos is a distributed systems kernel which abstracts
-    CPU, memory, storage, and other compute resources away from
-    machines (physical or virtual), enabling fault-tolerant and
-    elastic distributed systems to easily be built and run effectively.
-    See http://mesos.apache.org/
-    """
 
     def start(self):
-        self.task_queue = Queue()
-        self.result_queue = Queue()
-        framework = mesos_pb2.FrameworkInfo()
-        framework.user = ''
-
         if not configuration.get('mesos', 'MASTER'):
             logging.error("Expecting mesos master URL for mesos executor")
             raise AirflowException("mesos.master not provided for mesos executor")
+        if configuration.getboolean('mesos', 'AUTHENTICATE'):
+            if not configuration.get('mesos', 'DEFAULT_PRINCIPAL'):
+                logging.error("Expecting authentication principal in the environment")
+                raise AirflowException("mesos.default_principal not provided in authenticated mode")
+            if not configuration.get('mesos', 'DEFAULT_SECRET'):
+                logging.error("Expecting authentication secret in the environment")
+                raise AirflowException("mesos.default_secret not provided in authenticated mode")
 
+        self.task_queue = []
+        self.task_mutex = Lock()
+        self.result_queue = []
+        self.result_mutex = Lock()
+
+        framework = mesos_pb2.FrameworkInfo()
+        framework.user = ''
+        framework.name = DEFAULT_FRAMEWORK_NAME
+        implicit_acknowledgements = 1
         master = configuration.get('mesos', 'MASTER')
-
-        framework.name = get_framework_name()
-
-        if not configuration.get('mesos', 'TASK_CPU'):
-            task_cpu = 1
-        else:
-            task_cpu = configuration.getint('mesos', 'TASK_CPU')
-
-        if not configuration.get('mesos', 'TASK_MEMORY'):
-            task_memory = 256
-        else:
-            task_memory = configuration.getint('mesos', 'TASK_MEMORY')
 
         if configuration.getboolean('mesos', 'CHECKPOINT'):
             framework.checkpoint = True
@@ -258,19 +364,9 @@ class AstronomerMesosExecutor(BaseExecutor):
         else:
             framework.checkpoint = False
 
-        logging.info('MesosFramework master : %s, name : %s, cpu : %s, mem : %s, checkpoint : %s',
-            master, framework.name, str(task_cpu), str(task_memory), str(framework.checkpoint))
-
-        implicit_acknowledgements = 1
+        logging.info('MesosFramework master : %s, name : %s', master, framework.name)
 
         if configuration.getboolean('mesos', 'AUTHENTICATE'):
-            if not configuration.get('mesos', 'DEFAULT_PRINCIPAL'):
-                logging.error("Expecting authentication principal in the environment")
-                raise AirflowException("mesos.default_principal not provided in authenticated mode")
-            if not configuration.get('mesos', 'DEFAULT_SECRET'):
-                logging.error("Expecting authentication secret in the environment")
-                raise AirflowException("mesos.default_secret not provided in authenticated mode")
-
             credential = mesos_pb2.Credential()
             credential.principal = configuration.get('mesos', 'DEFAULT_PRINCIPAL')
             credential.secret = configuration.get('mesos', 'DEFAULT_SECRET')
@@ -278,7 +374,7 @@ class AstronomerMesosExecutor(BaseExecutor):
             framework.principal = credential.principal
 
             driver = mesos.native.MesosSchedulerDriver(
-                AirflowMesosScheduler(self.task_queue, self.result_queue, task_cpu, task_memory),
+                AirflowMesosScheduler(self.task_queue, self.task_mutex, self.result_queue, self.result_mutex),
                 framework,
                 master,
                 implicit_acknowledgements,
@@ -286,7 +382,7 @@ class AstronomerMesosExecutor(BaseExecutor):
         else:
             framework.principal = 'Airflow'
             driver = mesos.native.MesosSchedulerDriver(
-                AirflowMesosScheduler(self.task_queue, self.result_queue, task_cpu, task_memory),
+                AirflowMesosScheduler(self.task_queue, self.task_mutex, self.result_queue, self.result_mutex),
                 framework,
                 master,
                 implicit_acknowledgements)
@@ -295,13 +391,20 @@ class AstronomerMesosExecutor(BaseExecutor):
         self.mesos_driver.start()
 
     def execute_async(self, key, command, queue=None):
-        self.task_queue.put((key, command))
+        self.task_mutex.acquire()
+        try:
+            self.task_queue.append(Task(key=key, cmd=command))
+        finally:
+            self.task_mutex.release()
 
     def sync(self):
-        while not self.result_queue.empty():
-            results = self.result_queue.get()
-            self.change_state(*results)
+        self.result_mutex.acquire()
+        try:
+            while self.result_queue:
+                results = self.result_queue.pop(0)
+                self.change_state(*results)
+        finally:
+            self.result_mutex.release()
 
     def end(self):
-        self.task_queue.join()
         self.mesos_driver.stop()
