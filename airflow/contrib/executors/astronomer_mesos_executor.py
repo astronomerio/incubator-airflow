@@ -226,11 +226,11 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
             _log.debug("Scheduler is not yet sync'd - triggering a resync")
             self.triggerResync(driver)
 
-        if not self.syncd:
-            _log.debug("Scheduler has not yet sync'd")
-            for offer in offers:
-                driver.declineOffer(offer.id)
-            return
+        # if not self.syncd:
+        #     _log.debug("Scheduler has not yet sync'd")
+        #     for offer in offers:
+        #         driver.declineOffer(offer.id)
+        #     return
 
         for offer in offers:
             offerCpus = 0
