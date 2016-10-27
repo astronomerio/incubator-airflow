@@ -135,7 +135,7 @@ class Task(object):
         else:
             self.backoff_iteration += 1
 
-        if self.backoff_iteration > 8
+        if self.backoff_iteration > 8:
             self.task_id = None
 
         self.clean = False
