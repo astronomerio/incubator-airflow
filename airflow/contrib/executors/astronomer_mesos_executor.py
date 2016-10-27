@@ -37,7 +37,7 @@ class Task(object):
         self.state = kwargs.get("state") or None
         self.created = kwargs.get("created") or datetime.utcnow()
         self.updated = kwargs.get("updated") or datetime.utcnow()
-        self.key = kwargs.get("key") or None
+        self.key = kwargs.get("key") or mesos_pb2.TASK_STAGING
         self.cmd = kwargs.get("cmd") or ""
         self.task_id = str(self._ids.next())
         self.agent_id = kwargs.get("agent_id") or None
@@ -183,7 +183,7 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
 
     def makeOldTasksDirty(self, driver):
         for task in self.tasks.itervalues():
-                if not task.running() and task.old():
+                if not task.state == mesos_pb2.TASK_RUNNING and task.old():
                     task.make_dirty()
         self.triggerResync(driver)
 
