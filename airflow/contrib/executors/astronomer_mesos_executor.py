@@ -34,10 +34,10 @@ class Task(object):
     _ids = count(0)
 
     def __init__(self, **kwargs):
-        self.state = kwargs.get("state") or None
+        self.state = kwargs.get("state") or mesos_pb2.TASK_STAGING
         self.created = kwargs.get("created") or datetime.utcnow()
         self.updated = kwargs.get("updated") or datetime.utcnow()
-        self.key = kwargs.get("key") or mesos_pb2.TASK_STAGING
+        self.key = kwargs.get("key") or None
         self.cmd = kwargs.get("cmd") or ""
         self.task_id = str(self._ids.next())
         self.agent_id = kwargs.get("agent_id") or None
