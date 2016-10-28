@@ -6,8 +6,7 @@ _operators = {
     'ssh_execute_operator': ['SSHExecuteOperator'],
     'vertica_operator': ['VerticaOperator'],
     'vertica_to_hive': ['VerticaToHiveTransfer'],
-    'qubole_operator': ['QuboleOperator'],
-    'astronomer_s3_key_sensor': ['AstronomerS3KeySensor']
+    'qubole_operator': ['QuboleOperator']
 }
 
 _import_module_attrs(globals(), _operators)
