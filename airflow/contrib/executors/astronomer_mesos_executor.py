@@ -141,8 +141,8 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
                 container = mesos_pb2.ContainerInfo()
                 container.type = 1 # mesos_pb2.ContainerInfo.Type.DOCKER
                 volume = container.volumes.add()
-                volume.host_path = "/airflow/logs"
-                volume.container_path = "/airflow/logs"
+                volume.host_path = "/airflow_home/logs"
+                volume.container_path = "/airflow_home/logs"
                 volume.mode = 1 # mesos_pb2.Volume.Mode.RW
 
                 volume = container.volumes.add()
