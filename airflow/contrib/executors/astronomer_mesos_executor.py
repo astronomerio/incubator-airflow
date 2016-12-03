@@ -151,7 +151,7 @@ class AirflowMesosScheduler(mesos.interface.Scheduler):
                 volume.mode = 1 # mesos_pb2.Volume.Mode.RW
 
                 docker = mesos_pb2.ContainerInfo.DockerInfo()
-                docker.image = "astronomerio/airflow"
+                docker.image = os.getenv("DOCKER_AIRFLOW_IMAGE_TAG", "astronomerio/airflow")
                 docker.force_pull_image = True
 
                 container.docker.MergeFrom(docker)
