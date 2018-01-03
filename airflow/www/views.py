@@ -1870,12 +1870,23 @@ class HomeView(AdminIndexView):
             }
 
         all_dag_ids = sorted(set(orm_dags.keys()) | set(webserver_dags.keys()))
+
+        # default to displaying all dags
+        display_dag_ids = all_dag_ids
+
+        if conf.getboolean('webserver', 'hide_removed_dags'):
+            # Filter dags to only those in webserver dag bag (dags in the file system)
+            display_dag_ids = []
+            for dag_id in all_dag_ids:
+                if dag_id in dagbag.dags:
+                    display_dag_ids.append(dag_id)
+
         return self.render(
             'airflow/dags.html',
             webserver_dags=webserver_dags,
             orm_dags=orm_dags,
             hide_paused=hide_paused,
-            all_dag_ids=all_dag_ids)
+            all_dag_ids=display_dag_ids)
 
 
 class QueryView(wwwutils.DataProfilingMixin, BaseView):
