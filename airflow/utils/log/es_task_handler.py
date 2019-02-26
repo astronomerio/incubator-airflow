@@ -29,7 +29,7 @@ from airflow.utils import timezone
 from airflow.utils.helpers import parse_template_string
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.utils.log.json_formatter import create_formatter
+from airflow.utils.log.json_formatter import JSONFormatter
 
 
 class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
@@ -54,7 +54,7 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
 
     def __init__(self, base_log_folder, filename_template,
                  log_id_template, end_of_log_mark,
-                 write_stdout, json_format, record_labels,
+                 write_stdout, json_format, json_fields,
                  host='localhost:9200'):
         """
         :param base_log_folder: base folder to store logs locally
@@ -74,7 +74,7 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
         self.end_of_log_mark = end_of_log_mark
         self.write_stdout = write_stdout
         self.json_format = json_format
-        self.record_labels = [label.strip() for label in record_labels.split(",")]
+        self.json_fields = [label.strip() for label in json_fields.split(",")]
 
         self.handler = None
 
@@ -90,9 +90,13 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
                                            execution_date=execution_date,
                                            try_number=try_number)
 
-    # Remove elasticsearch reserved characters
-    # https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#_reserved_characters
     def _clean_execution_date(self, execution_date):
+        """
+        Clean up an execution date so that it is safe to query in elasticsearch
+        by removing reserved characters.
+        # https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#_reserved_characters
+        :param execution_date: execution date of the dag run.
+        """
         return re.sub(r"[\+\-\:\.]", "", execution_date.isoformat())
 
     def _read(self, ti, try_number, metadata=None):
@@ -173,33 +177,26 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
         return logs
 
     def set_context(self, ti):
+        """
+        Provide task_instance context to airflow task handler.
+        :param ti: task instance object
+        """
         self.mark_end_on_close = not ti.raw
 
         if self.write_stdout:
             self.handler = logging.StreamHandler(stream=sys.__stdout__)
             self.handler.setLevel(self.level)
             if self.json_format and not ti.raw:
-                self.handler.setFormatter(create_formatter(self.record_labels, {
-                    'dag_id': str(ti.dag_id),
-                    'task_id': str(ti.task_id),
-                    'execution_date': self._clean_execution_date(ti.execution_date),
-                    'try_number': str(ti.try_number)}))
+                self.handler.setFormatter(
+                    JSONFormatter(self.formatter._fmt, json_fields=self.json_fields, extras={
+                        'dag_id': str(ti.dag_id),
+                        'task_id': str(ti.task_id),
+                        'execution_date': self._clean_execution_date(ti.execution_date),
+                        'try_number': str(ti.try_number)}))
             else:
                 self.handler.setFormatter(self.formatter)
         else:
             super(ElasticsearchTaskHandler, self).set_context(ti)
-
-    def emit(self, record):
-        if self.write_stdout:
-            self.formatter.format(record)
-            if self.handler is not None:
-                self.handler.emit(record)
-        else:
-            super(ElasticsearchTaskHandler, self).emit(record)
-
-    def flush(self):
-        if self.handler is not None:
-            self.handler.flush()
 
     def close(self):
         # When application exit, system shuts down all handlers by
