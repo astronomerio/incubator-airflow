@@ -37,6 +37,9 @@ def create_app(config=None, testing=False):
     app.secret_key = configuration.get('webserver', 'SECRET_KEY')
     app.config['LOGIN_DISABLED'] = not configuration.getboolean('webserver', 'AUTHENTICATE')
 
+    tracking_snippet = configuration.get('analytics', 'TRACKING_SNIPPET')
+    app.add_template_global(name='tracking_snippet', f=tracking_snippet)
+
     csrf.init_app(app)
 
     app.config['TESTING'] = testing
