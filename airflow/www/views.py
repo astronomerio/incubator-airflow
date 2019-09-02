@@ -71,6 +71,7 @@ from airflow.api.common.experimental.mark_tasks import (set_dag_run_state_to_run
                                                         set_dag_run_state_to_failed)
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator, Connection, DagRun, errors, XCom
+from airflow.settings import STORE_SERIALIZED_DAGS
 from airflow.operators.subdag_operator import SubDagOperator
 from airflow.ti_deps.dep_context import DepContext, QUEUE_DEPS, SCHEDULER_DEPS
 from airflow.utils import timezone
@@ -91,7 +92,7 @@ CHART_LIMIT = 200000
 
 UTF8_READER = codecs.getreader('utf-8')
 
-dagbag = models.DagBag(settings.DAGS_FOLDER)
+dagbag = models.DagBag(settings.DAGS_FOLDER, store_serialized_dags=STORE_SERIALIZED_DAGS)
 
 login_required = airflow.login.login_required
 current_user = airflow.login.current_user
@@ -766,7 +767,9 @@ class Airflow(AirflowViewMixin, BaseView):
         dttm = pendulum.parse(execution_date)
         form = DateTimeForm(data={'execution_date': dttm})
         root = request.args.get('root', '')
-        dag = dagbag.get_dag(dag_id)
+        # Loads dag from file
+        logging.info("Processing DAG file to render template.")
+        dag = dagbag.get_dag(dag_id, from_file_only=True)
         task = copy.copy(dag.get_task(task_id))
         ti = models.TaskInstance(task=task, execution_date=dttm)
         try:
@@ -1589,7 +1592,8 @@ class Airflow(AirflowViewMixin, BaseView):
         external_logs = conf.get('elasticsearch', 'frontend')
         return self.render(
             'airflow/tree.html',
-            operators=sorted({op.__class__ for op in dag.tasks}, key=lambda x: x.__name__),
+            operators=sorted({op.task_type: op for op in dag.tasks}.values(),
+                             key=lambda x: x.task_type),
             root=root,
             form=form,
             dag=dag, data=data, blur=blur, num_runs=num_runs,
@@ -1682,7 +1686,8 @@ class Airflow(AirflowViewMixin, BaseView):
             state_token=state_token(dt_nr_dr_data['dr_state']),
             doc_md=doc_md,
             arrange=arrange,
-            operators=sorted({op.__class__ for op in dag.tasks}, key=lambda x: x.__name__),
+            operators=sorted({op.task_type: op for op in dag.tasks}.values(),
+                             key=lambda x: x.task_type),
             blur=blur,
             root=root or '',
             task_instances=task_instances,
@@ -1955,7 +1960,9 @@ class Airflow(AirflowViewMixin, BaseView):
     def paused(self, session=None):
         dag_id = request.values.get('dag_id')
         is_paused = True if request.args.get('is_paused') == 'false' else False
-        models.DagModel.get_dagmodel(dag_id).set_is_paused(is_paused=is_paused)
+        models.DagModel.get_dagmodel(dag_id).set_is_paused(
+            is_paused=is_paused,
+            store_serialized_dags=STORE_SERIALIZED_DAGS)
         return "OK"
 
     @expose('/refresh', methods=['POST'])
