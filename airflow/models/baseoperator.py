@@ -17,15 +17,18 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from abc import ABCMeta, abstractmethod
-from cached_property import cached_property
+
 import copy
 import functools
 import logging
 import sys
 import warnings
-from datetime import timedelta, datetime
-from typing import Iterable, Optional, Dict, Callable, Set
+from abc import ABCMeta, abstractmethod
+from datetime import datetime, timedelta
+from typing import Callable, Dict, FrozenSet, Iterable, Optional, Set
+
+
+from cached_property import cached_property
 
 import jinja2
 import six
@@ -993,7 +996,7 @@ class BaseOperator(LoggingMixin):
 
 # pylint: disable=protected-access
 BaseOperator._serialized_fields = frozenset(
-    vars(BaseOperator(task_id='test')).keys() - {
+    set(vars(BaseOperator(task_id='test')).keys()) - {
         'inlets', 'outlets', '_upstream_task_ids', 'default_args'
     } | {'_task_type', 'subdag', 'ui_color', 'ui_fgcolor', 'template_fields'}
 )
