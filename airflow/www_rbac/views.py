@@ -1025,9 +1025,11 @@ class Airflow(AirflowBaseView):
             dags = dags.all()
 
             for dag_id, active_dag_runs in dags:
-                max_active_runs = 0
-                if dag_id in dagbag.dags:
-                    max_active_runs = dagbag.dags[dag_id].max_active_runs
+                dag = dagbag.get_dag(dag_id)
+                max_active_runs = dagbag.dags[dag_id].max_active_runs
+                if dag:
+                    # TODO: Make max_active_runs a column so we can query for it directly
+                    max_active_runs = dag.max_active_runs
                 payload.append({
                     'dag_id': dag_id,
                     'active_dag_run': active_dag_runs,
@@ -1209,7 +1211,7 @@ class Airflow(AirflowBaseView):
         dag_id = request.args.get('dag_id')
         blur = conf.getboolean('webserver', 'demo_mode')
         dag = dagbag.get_dag(dag_id)
-        if dag_id not in dagbag.dags:
+        if not dag:
             flash('DAG "{0}" seems to be missing.'.format(dag_id), "error")
             return redirect(url_for('Airflow.index'))
 
@@ -1338,7 +1340,7 @@ class Airflow(AirflowBaseView):
         dag_id = request.args.get('dag_id')
         blur = conf.getboolean('webserver', 'demo_mode')
         dag = dagbag.get_dag(dag_id)
-        if dag_id not in dagbag.dags:
+        if not dag:
             flash('DAG "{0}" seems to be missing.'.format(dag_id), "error")
             return redirect(url_for('Airflow.index'))
 
@@ -1724,16 +1726,6 @@ class Airflow(AirflowBaseView):
         dagbag.get_dag(dag_id)
         flash("DAG [{}] is now fresh as a daisy".format(dag_id))
         return redirect(request.referrer)
-
-    @expose('/refresh_all', methods=['POST'])
-    @has_access
-    @action_logging
-    def refresh_all(self):
-        dagbag.collect_dags(only_if_updated=False)
-        # sync permissions for all dags
-        appbuilder.sm.sync_perm_for_dag()
-        flash("All DAGs are now up to date")
-        return redirect(url_for('Airflow.index'))
 
     @expose('/gantt')
     @has_dag_access(can_dag_read=True)
