@@ -25,7 +25,7 @@ import sys
 import warnings
 from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
-from typing import Callable, Dict, FrozenSet, Iterable, Optional, Set
+from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Type
 
 
 from cached_property import cached_property
@@ -576,7 +576,21 @@ class BaseOperator(LoggingMixin):
 
     @cached_property
     def operator_extra_link_dict(self):
-        return {link.name: link for link in self.operator_extra_links}
+        """Returns dictionary of all extra links for the operator"""
+        from airflow.plugins_manager import operator_extra_links
+
+        op_extra_links_from_plugin = {}
+        for ope in operator_extra_links:
+            if ope.operators and self.__class__ in ope.operators:
+                op_extra_links_from_plugin.update({ope.name: ope})
+
+        operator_extra_links_all = {
+            link.name: link for link in self.operator_extra_links
+        }
+        # Extra links defined in Plugins overrides operator links defined in operator
+        operator_extra_links_all.update(op_extra_links_from_plugin)
+
+        return operator_extra_links_all
 
     @cached_property
     def global_operator_extra_link_dict(self):
@@ -1008,6 +1022,14 @@ class BaseOperatorLink:
     """
 
     __metaclass__ = ABCMeta
+
+    operators = []   # type: List[Type[BaseOperator]]
+    """
+    This property will be used by Airflow Plugins to find the Operators to which you want
+    to assign this Operator Link
+
+    :return: List of Operator classes used by task for which you want to create extra link
+    """
 
     @property
     @abstractmethod
