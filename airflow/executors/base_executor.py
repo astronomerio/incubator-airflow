@@ -153,7 +153,8 @@ class BaseExecutor(LoggingMixin):
             self.execute_async(key=key,
                                command=command,
                                queue=queue,
-                               executor_config=simple_ti.executor_config)
+                               executor_config=simple_ti.executor_config,
+                               task_instance=simple_ti)
 
     def change_state(self, key, state):
         self.log.debug("Changing state: %s", key)
@@ -191,7 +192,8 @@ class BaseExecutor(LoggingMixin):
                       key,
                       command,
                       queue=None,
-                      executor_config=None):  # pragma: no cover
+                      executor_config=None,
+                      task_instance=None):  # pragma: no cover
         """
         This method will execute the command asynchronously.
         """

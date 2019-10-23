@@ -57,7 +57,7 @@ class DaskExecutor(BaseExecutor):
         self.client = distributed.Client(self.cluster_address, security=security)
         self.futures = {}
 
-    def execute_async(self, key, command, queue=None, executor_config=None):
+    def execute_async(self, key, command, queue=None, executor_config=None, task_instance=None):
         if queue is not None:
             warnings.warn(
                 'DaskExecutor does not support queues. '

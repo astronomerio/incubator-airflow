@@ -828,7 +828,7 @@ class KubernetesExecutor(BaseExecutor, LoggingMixin):
         self._inject_secrets()
         self.clear_not_launched_queued_tasks()
 
-    def execute_async(self, key, command, queue=None, executor_config=None):
+    def execute_async(self, key, command, queue=None, executor_config=None, task_instance=None):
         """Executes task asynchronously"""
         self.log.info(
             'Add task %s with command %s with executor_config %s',
