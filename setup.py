@@ -367,6 +367,7 @@ def do_setup():
             'funcsigs==1.0.0',
             'future>=0.16.0, <0.17',
             'graphviz>=0.12',
+            'aiohttp==3.5.4',
             'gunicorn>=19.5.0, <20.0',
             'iso8601>=0.1.12',
             'jsonschema~=3.0',
