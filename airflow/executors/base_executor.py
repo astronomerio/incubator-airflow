@@ -167,6 +167,9 @@ class BaseExecutor(LoggingMixin):
     def success(self, key):
         self.change_state(key, State.SUCCESS)
 
+    def set_not_running(self, key):
+        self.running.pop(key, None)
+
     def get_event_buffer(self, dag_ids=None):
         """
         Returns and flush the event buffer. In case dag_ids is specified
