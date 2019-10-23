@@ -27,6 +27,7 @@ from freezegun import freeze_time
 from mock import patch, mock_open
 from parameterized import parameterized, param
 from sqlalchemy.orm.session import Session
+from airflow.models import taskinstance
 from airflow import models, settings
 from airflow.configuration import conf
 from airflow.contrib.sensors.python_sensor import PythonSensor
@@ -101,6 +102,33 @@ class TaskInstanceTest(unittest.TestCase):
             op3.start_date == DEFAULT_DATE + datetime.timedelta(days=1))
         self.assertTrue(
             op3.end_date == DEFAULT_DATE + datetime.timedelta(days=9))
+
+    def test_last_heartbeat(self):
+        dag_id = 'test_requeue_over_dag_concurrency'
+        task_id = 'test_requeue_over_dag_concurrency_op'
+        dag = DAG(dag_id=dag_id, start_date=DEFAULT_DATE,
+                  max_active_runs=1, concurrency=2)
+        task = DummyOperator(task_id=task_id, dag=dag)
+        import datetime
+        start_date = datetime.datetime(year=2019, day=1, month=1)
+        ti = TI(task=task, execution_date=start_date, state=State.RUNNING)
+        # ti.heartbeat()
+        # TI.run() will sync from DB before validating deps.
+        with create_session() as session:
+            session.query(TI).filter(
+                TI.dag_id == dag_id,
+                TI.task_id == task_id,
+            ).delete()
+            session.commit()
+            ti.heartbeat(session=session, time=timezone.utcnow())
+            stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
+            self.assertEqual(stale, [])
+            time.sleep(3)
+            stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
+            self.assertNotEqual(stale, [])
+            ti.heartbeat()
+            stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
+            self.assertNotEqual(stale, [])
 
     def test_timezone_awareness(self):
         NAIVE_DATETIME = DEFAULT_DATE.replace(tzinfo=None)
