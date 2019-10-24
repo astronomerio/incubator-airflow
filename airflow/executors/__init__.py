@@ -60,6 +60,7 @@ class Executors:
     DaskExecutor = "DaskExecutor"
     MesosExecutor = "MesosExecutor"
     KubernetesExecutor = "KubernetesExecutor"
+    KnativeExecutor = "KnativeExecutor"
 
 
 def _get_executor(executor_name):
@@ -84,6 +85,9 @@ def _get_executor(executor_name):
     elif executor_name == Executors.KubernetesExecutor:
         from airflow.contrib.executors.kubernetes_executor import KubernetesExecutor
         return KubernetesExecutor()
+    elif executor_name == Executors.KnativeExecutor:
+        from airflow.executors.knative_executor import KnativeExecutor
+        return KnativeExecutor()
     else:
         # Loading plugins
         _integrate_plugins()

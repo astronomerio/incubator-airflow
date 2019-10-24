@@ -178,6 +178,7 @@ exclude_patterns = [
     '_api/airflow/config_templates',
     '_api/airflow/configuration',
     '_api/airflow/contrib/auth',
+    '_api/airflow/worker',
     '_api/airflow/contrib/example_dags',
     '_api/airflow/contrib/index.rst',
     '_api/airflow/contrib/kubernetes',
@@ -449,7 +450,6 @@ autoapi_ignore = [
     '*/airflow/contrib/operators/s3_to_gcs_transfer_operator.py',
     '*/airflow/contrib/operators/gcs_to_gcs_transfer_operator.py',
     '*/airflow/contrib/operators/gcs_to_gcs_transfer_operator.py',
-
     '*/node_modules/*',
     '*/migrations/*',
 ]

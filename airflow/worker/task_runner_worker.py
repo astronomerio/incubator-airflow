@@ -18,12 +18,14 @@
 # under the License.
 #
 
-import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any
-
+import asyncio
+from aiohttp import web
+import pendulum
+from contextlib import suppress
+from typing import Dict
 from airflow import settings
 from airflow.exceptions import AirflowException
 from airflow.models import DAG
@@ -35,20 +37,13 @@ from airflow.utils.net import get_hostname
 from airflow.utils.state import State
 from concurrent.futures import ProcessPoolExecutor
 
-import pendulum
-from contextlib import suppress
-
-app = None  # type: Any
-loop: asyncio.AbstractEventLoop = None
+app = None
+loop = None
 pool = None
 executor = None
 DAGS_FOLDER = settings.DAGS_FOLDER
-from aiohttp import web
 
-import asyncio
-from aiohttp import web
-
-running_tasks_map = {}
+running_tasks_map = {}  # type: Dict[str, TaskInstance]
 
 heartbeat_loop_task = None
 num = 0
@@ -73,12 +68,12 @@ async def run_task(request):
     global running_tasks_map
     dag_id = request.rel_url.query['dag_id']
     task_id = request.rel_url.query['task_id']
-    # subdir = request.rel_url.query['subdir']
-    subdir = "/root/airflow/dags"
+    subdir = None
     response = None
     execution_date = pendulum.fromtimestamp(int(request.rel_url.query["execution_date"]))
     log = LoggingMixin().log
-    log.info("running dag {} for task {} on date {} in subdir {}".format(dag_id, task_id, execution_date, subdir))
+    log.info("running dag {} for task {} on date {} in subdir {}"
+             .format(dag_id, task_id, execution_date, subdir))
     logging.shutdown()
     key = (task_id, dag_id, execution_date).__str__()
     try:
@@ -89,12 +84,11 @@ async def run_task(request):
         settings.configure_orm(disable_connection_pool=True)
         ti = get_task_instance(dag_id=dag_id,
                                task_id=task_id,
-                               subdir=subdir,
+                               subdir=process_subdir(subdir),
                                execution_date=execution_date)
         out = run(ti)
         running_tasks_map[key] = ti
         run_task_instance(ti, log)
-
 
         if out.state == 'success':
             response = web.Response(

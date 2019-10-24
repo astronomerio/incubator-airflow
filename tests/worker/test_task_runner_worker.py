@@ -26,7 +26,6 @@ from airflow.models import taskinstance
 from airflow.utils.state import State
 from tests.models import DEFAULT_DATE
 from airflow.worker import task_runner_worker
-import time
 import asyncio
 from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
@@ -44,7 +43,7 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
     @unittest_run_loop
     async def test_hello(self):
         resp = await self.client.request("GET", "health?name=daniel")
-        dag_id='test_requeue_over_dag_concurrency'
+        dag_id = 'test_requeue_over_dag_concurrency'
         task_id = 'test_requeue_over_dag_concurrency_op'
         dag = DAG(dag_id=dag_id, start_date=DEFAULT_DATE,
                   max_active_runs=1, concurrency=2)
@@ -61,7 +60,7 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
 
     @unittest_run_loop
     async def test_heartbeat_function(self):
-        dag_id='test_requeue_over_dag_concurrency'
+        dag_id = 'test_requeue_over_dag_concurrency'
         task_id = 'test_requeue_over_dag_concurrency_op'
         dag = DAG(dag_id=dag_id, start_date=DEFAULT_DATE,
                   max_active_runs=1, concurrency=2)
@@ -76,7 +75,7 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
                 TI.task_id == task_id,
             ).delete()
             session.commit()
-            stale_time = timezone.utcnow()- datetime.timedelta(seconds=20)
+            stale_time = timezone.utcnow() - datetime.timedelta(seconds=20)
             ti.heartbeat(session=session, time=stale_time)
             stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
             self.assertNotEqual(stale, [])
