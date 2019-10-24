@@ -18,7 +18,6 @@
 # under the License.
 
 import datetime
-import io
 import logging
 import os
 import re
@@ -1077,7 +1076,7 @@ class DagTest(unittest.TestCase):
             t5 = DummyOperator(task_id="t5")
             [t1, t2] >> t3 >> [t4, t5]
 
-            self.assertCountEqual(dag.roots, [t1, t2])
+            six.assertCountEqual(self, dag.roots, [t1, t2])
 
     def test_leaves(self):
         """Verify if dag.leaves returns the leaf tasks of a DAG."""
@@ -1089,7 +1088,7 @@ class DagTest(unittest.TestCase):
             t5 = DummyOperator(task_id="t5")
             [t1, t2] >> t3 >> [t4, t5]
 
-            self.assertCountEqual(dag.leaves, [t4, t5])
+            six.assertCountEqual(self, dag.leaves, [t4, t5])
 
     def test_tree_view(self):
         """Verify correctness of dag.tree_view()."""
@@ -1099,7 +1098,7 @@ class DagTest(unittest.TestCase):
             t3 = DummyOperator(task_id="t3")
             t1 >> t2 >> t3
 
-            with mock.patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
+            with mock.patch('sys.stdout', new_callable=six.StringIO) as mock_stdout:
                 dag.tree_view()
                 stdout = mock_stdout.getvalue()
 
