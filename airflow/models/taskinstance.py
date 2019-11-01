@@ -172,6 +172,7 @@ class TaskInstance(Base, LoggingMixin):
         Index('ti_state', state),
         Index('ti_state_lkp', dag_id, task_id, execution_date, state),
         Index('ti_pool', pool, state, priority_weight),
+        Index('idx_task_heartbeat', task_id, last_heartbeat),
         Index('ti_job_id', job_id),
     )
 
