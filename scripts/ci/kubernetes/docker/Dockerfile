@@ -19,8 +19,8 @@ FROM ubuntu:16.04
 # install deps
 RUN apt-get update -y && apt-get install -y \
         wget \
-        python-dev \
-        python-pip \
+        python3-dev \
+        python3-pip \
         libczmq-dev \
         libcurlpp-dev \
         curl \
@@ -33,19 +33,19 @@ RUN apt-get update -y && apt-get install -y \
         unzip \
     && apt-get clean
 
-RUN pip install --upgrade pip
+RUN pip3 install --upgrade pip
 
 # Since we install vanilla Airflow, we also want to have support for Postgres and Kubernetes
-RUN pip install -U setuptools && \
-    pip install kubernetes && \
-    pip install cryptography && \
-    pip install psycopg2-binary==2.7.4  # I had issues with older versions of psycopg2, just a warning
+RUN pip3 install -U setuptools && \
+    pip3 install kubernetes && \
+    pip3 install cryptography && \
+    pip3 install psycopg2-binary==2.7.4  # I had issues with older versions of psycopg2, just a warning
 
 # install airflow
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN pip3 install -r /tmp/requirements.txt
 COPY airflow.tar.gz /tmp/airflow.tar.gz
-RUN pip install --no-use-pep517 /tmp/airflow.tar.gz
+RUN pip3 install --no-use-pep517 /tmp/airflow.tar.gz
 
 COPY airflow-test-env-init.sh /tmp/airflow-test-env-init.sh
 
