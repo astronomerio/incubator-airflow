@@ -81,5 +81,5 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
             self.assertNotEqual(stale, [])
             task_runner_worker.running_tasks_map["test_requeue_over_dag_concurrency_op"] = ti
             await asyncio.sleep(3)
-            stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=5)
+            stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=15)
             self.assertEqual(stale, [])

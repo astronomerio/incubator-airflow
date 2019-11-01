@@ -49,13 +49,17 @@ heartbeat_loop_task = None
 num = 0
 
 
+async def heartbeat_task_instance(taskinstance):
+    taskinstance.heartbeat()
+
+
 async def heartbeat():
     global running_tasks_map, num
     while True:
         num = num + 1
         for k, v in running_tasks_map.items():
             a = v
-            await a.heartbeat()
+            await heartbeat_task_instance(a)
         await asyncio.sleep(1)
 
 
