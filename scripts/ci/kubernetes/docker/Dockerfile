@@ -14,13 +14,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 
 # install deps
 RUN apt-get update -y && apt-get install -y \
         wget \
         python3-dev \
         python3-pip \
+        python3.6 \
         libczmq-dev \
         libcurlpp-dev \
         curl \
