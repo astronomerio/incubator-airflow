@@ -112,8 +112,6 @@ class TaskInstanceTest(unittest.TestCase):
         import datetime
         start_date = datetime.datetime(year=2019, day=1, month=1)
         ti = TI(task=task, execution_date=start_date, state=State.RUNNING)
-        # ti.heartbeat()
-        # TI.run() will sync from DB before validating deps.
         with create_session() as session:
             session.query(TI).filter(
                 TI.dag_id == dag_id,

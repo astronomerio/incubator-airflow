@@ -79,8 +79,12 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
             ti.heartbeat(session=session, time=stale_time)
             stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
             self.assertNotEqual(stale, [])
+            heartbeat1 = stale[0].last_heartbeat
             task_runner_worker.running_tasks_map["test_requeue_over_dag_concurrency_op"] = ti
             await asyncio.sleep(3)
             self.assertGreater(task_runner_worker.num_heartbeats, 0)
             stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=15)
+            if stale:
+                heartbeat2 = stale[0].last_heartbeat
+                self.assertNotEqual(heartbeat1, heartbeat2)
             self.assertEqual(stale, [])
