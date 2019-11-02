@@ -85,6 +85,12 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
             self.assertGreater(task_runner_worker.num_heartbeats, 0)
             stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=15)
             if stale:
+                from datetime import timedelta
                 heartbeat2 = stale[0].last_heartbeat
                 self.assertNotEqual(heartbeat1, heartbeat2)
+                stale_time = timezone.utcnow() - timedelta(seconds=15)
+                self.assertEqual(stale, [], "there's something wrong with the heartbeating.\n"
+                                            "Last heartbeat: {}\n"
+                                            "current heartbeat: {}\n"
+                                            "stale time: {}".format(heartbeat1, heartbeat2, stale_time))
             self.assertEqual(stale, [])
