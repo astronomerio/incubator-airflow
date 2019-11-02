@@ -46,7 +46,7 @@ DAGS_FOLDER = settings.DAGS_FOLDER
 running_tasks_map = {}  # type: Dict[str, TaskInstance]
 
 heartbeat_loop_task = None
-num = 0
+num_heartbeats = 0
 
 
 async def heartbeat_task_instance(taskinstance):
@@ -54,9 +54,9 @@ async def heartbeat_task_instance(taskinstance):
 
 
 async def heartbeat():
-    global running_tasks_map, num
+    global running_tasks_map, num_heartbeats
     while True:
-        num = num + 1
+        num_heartbeats = num_heartbeats + 1
         for k, v in running_tasks_map.items():
             a = v
             await heartbeat_task_instance(a)
@@ -65,7 +65,7 @@ async def heartbeat():
 
 async def health(request):
     name = request.rel_url.query.get("name", "Daniel")
-    return web.Response(text="Hello, {}. There have been {} heartbeats.".format(name, num))
+    return web.Response(text="Hello, {}. There have been {} heartbeats.".format(name, num_heartbeats))
 
 
 async def run_task(request):
