@@ -55,9 +55,6 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
         task_runner_worker.running_tasks_map["test_requeue_over_dag_concurrency_op"] = ti
         await asyncio.sleep(5)
         text = await resp.text()
-        import time
-        # time.sleep(15)
-
         print(text)
 
     @unittest_run_loop
