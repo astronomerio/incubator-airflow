@@ -55,6 +55,8 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
         task_runner_worker.running_tasks_map["test_requeue_over_dag_concurrency_op"] = ti
         await asyncio.sleep(5)
         text = await resp.text()
+        import time
+        # time.sleep(15)
 
         print(text)
 
@@ -75,6 +77,8 @@ class TestTaskRunnerWorker(AioHTTPTestCase):
                 TI.task_id == task_id,
             ).delete()
             session.commit()
+            stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
+            self.assertEqual(stale, [])
             stale_time = timezone.utcnow() - datetime.timedelta(seconds=20)
             ti.heartbeat(session=session, time=stale_time)
             stale = taskinstance.get_stale_running_task_instances(session, stale_tolerance=2)
