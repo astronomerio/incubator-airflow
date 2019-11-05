@@ -107,6 +107,7 @@ async def run_task(request):
     global running_tasks_map
     dag_id = request.rel_url.query['dag_id']
     task_id = request.rel_url.query['task_id']
+    try_number = request.rel_url.query['try_number']
     subdir = None
     response = None
     execution_date = pendulum.fromtimestamp(int(request.rel_url.query["execution_date"]))
@@ -114,7 +115,7 @@ async def run_task(request):
     log.info("running dag {} for task {} on date {} in subdir {}"
              .format(dag_id, task_id, execution_date, subdir))
     logging.shutdown()
-    key = (task_id, dag_id, execution_date).__str__()
+    key = (task_id, dag_id, execution_date, try_number).__str__()
     try:
         # IMPORTANT, have to use the NullPool, otherwise, each "run" command may leave
         # behind multiple open sleeping connections while heartbeating, which could
@@ -165,6 +166,7 @@ def get_task_instance(
     task_id: str,
     subdir: str,
     execution_date: datetime,
+    try_number,
 ):
     dag = get_dag(dag_id, subdir)
 

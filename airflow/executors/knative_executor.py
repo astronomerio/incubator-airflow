@@ -39,6 +39,7 @@ async def make_request_async(
     task_id,
     dag_id,
     execution_date,
+    try_number,
     host,
     host_header=None
 ) -> aiohttp.ClientResponse:
@@ -49,6 +50,7 @@ async def make_request_async(
         "task_id": task_id,
         "dag_id": dag_id,
         "execution_date": date,
+        "try_number": try_number,
     }
     headers = {}
     if host_header:
@@ -79,15 +81,15 @@ class KnativeRequestLoop(multiprocessing.Process, LoggingMixin):
 
     def recieve_and_execute(self, loop):
         current_task = self.task_pipe.recv()
-        key, task_instance = current_task
-        loop.create_task(self.execute_work(key=key, task_instance=task_instance))
+        key = current_task
+        loop.create_task(self.execute_work(key=key))
 
     def run(self):
         loop = asyncio.get_event_loop()
         loop.add_reader(fd=self.task_pipe, callback=functools.partial(self.recieve_and_execute, loop))
         loop.run_forever()
 
-    async def execute_work(self, key, task_instance=None):
+    async def execute_work(self, key):
         """
         Executes command received and stores result state in queue.
         :param task_instance:
@@ -98,13 +100,15 @@ class KnativeRequestLoop(multiprocessing.Process, LoggingMixin):
         """
         if key is None:
             return
-        self.log.info("%s running %s", self.__class__.__name__, task_instance)
+        self.log.info("%s running %s", self.__class__.__name__, key)
         try:
             future = make_request_async(
-                task_instance.task_id,
-                task_instance.dag_id,
-                task_instance.execution_date,
-                host=self.host, host_header=self.host_header)
+                key.task_id,
+                key.dag_id,
+                key.execution_date,
+                key.try_number,
+                host=self.host,
+                host_header=self.host_header)
             resp = await future
             if resp.status != 200:
                 state = State.FAILED
@@ -173,7 +177,7 @@ class KnativeExecutor(BaseExecutor):
         if queue == "kubernetes":
             self.kube_executor.execute_async(key, command, queue, executor_config)
         else:
-            self.task_pipe.send((key, task_instance))
+            self.task_pipe.send(key)
 
     def check_heartbeats(self):
         session = settings.Session
