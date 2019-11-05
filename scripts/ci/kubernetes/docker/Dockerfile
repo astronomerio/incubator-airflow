@@ -46,7 +46,7 @@ RUN pip3 install -U setuptools && \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
 COPY airflow.tar.gz /tmp/airflow.tar.gz
-RUN pip3 install --no-use-pep517 /tmp/airflow.tar.gz
+RUN pip3 install /tmp/airflow.tar.gz
 
 COPY airflow-test-env-init.sh /tmp/airflow-test-env-init.sh
 

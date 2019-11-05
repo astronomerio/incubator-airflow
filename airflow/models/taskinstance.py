@@ -512,6 +512,7 @@ class TaskInstance(Base, LoggingMixin):
 
     @provide_session
     def heartbeat(self, time=timezone.utcnow(), session=None, commit=True):
+        self.log.debug("taskinstance heartbeating at {}".format(time))
         self.last_heartbeat = time
         session.merge(self)
         if commit:

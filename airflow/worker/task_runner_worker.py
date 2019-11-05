@@ -24,7 +24,6 @@ from datetime import datetime
 import asyncio
 from aiohttp import web
 import pendulum
-from contextlib import suppress
 from typing import Dict
 from airflow import settings
 from airflow.exceptions import AirflowException
@@ -36,6 +35,9 @@ from airflow.utils.log.logging_mixin import (LoggingMixin)
 from airflow.utils.net import get_hostname
 from airflow.utils.state import State
 from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+from airflow.utils.db import provide_session
+from airflow.utils.dag_processing import SimpleTaskInstance
 
 app = None
 loop = None
@@ -46,26 +48,59 @@ DAGS_FOLDER = settings.DAGS_FOLDER
 running_tasks_map = {}  # type: Dict[str, TaskInstance]
 
 heartbeat_loop_task = None
-num_heartbeats = 0
+logger = LoggingMixin().log
+_insert_pipe = None
+_pop_pipe = None
+_heartbeat = None
 
 
-async def heartbeat_task_instance(taskinstance):
-    taskinstance.heartbeat()
+def insert_into_heartbeat(k, v):
+    print("inserting into pipe {}".format(k))
+    _insert_pipe.send((k, v))
 
 
-async def heartbeat():
-    global running_tasks_map, num_heartbeats
-    while True:
-        num_heartbeats = num_heartbeats + 1
-        for k, v in running_tasks_map.items():
-            a = v
-            await heartbeat_task_instance(a)
-        await asyncio.sleep(1)
+def pop_from_heartbeat(k):
+    _pop_pipe.send(k)
+
+
+class HeartbeatManager(multiprocessing.Process, LoggingMixin):
+    @provide_session
+    def __init__(self, insert_pipe, pop_pipe, session=None):
+        super(HeartbeatManager, self).__init__()
+        self.insert_pipe = insert_pipe
+        self.pop_pipe = pop_pipe
+        self.running_tasks_map = {}
+        self.num_heartbeats = 0
+        self.session = session
+
+    def run(self):
+        print("manager started heartbeat")
+        self.log.info("manager started heartbeat")
+        self.heartbeat()
+
+    def heartbeat(self):
+        import time
+        from airflow.utils import timezone
+        while True:
+            print("heartbeating {}".format(timezone.utcnow()))
+            self.num_heartbeats = self.num_heartbeats + 1
+            while self.insert_pipe.poll():
+                new_key, new_val = self.insert_pipe.recv()
+                print("inserting {}".format(new_key))
+                self.running_tasks_map[new_key] = new_val.construct_task_instance()
+            while self.pop_pipe.poll():
+                pop_key = self.pop_pipe.recv()
+                self.running_tasks_map.pop(pop_key)
+            for k, v in self.running_tasks_map.items():
+                a = v
+                logger.info("heartbeating {} at {}".format(k, timezone.utcnow()))
+                a.heartbeat(session=self.session)
+            time.sleep(1)
 
 
 async def health(request):
     name = request.rel_url.query.get("name", "Daniel")
-    return web.Response(text="Hello, {}. There have been {} heartbeats.".format(name, num_heartbeats))
+    return web.Response(text="Hello, {}".format(name))
 
 
 async def run_task(request):
@@ -90,10 +125,10 @@ async def run_task(request):
                                task_id=task_id,
                                subdir=process_subdir(subdir),
                                execution_date=execution_date)
+        insert_into_heartbeat(key, SimpleTaskInstance(ti))
+
         out = run(ti)
         running_tasks_map[key] = ti
-        run_task_instance(ti, log)
-
         if out.state == 'success':
             response = web.Response(
                 body="successfully ran dag {} for task {} on date {}".format(dag_id, task_id, execution_date),
@@ -105,7 +140,7 @@ async def run_task(request):
         tb = traceback.format_exc()
         response = web.Response(body="failed {} {}".format(e, tb), status=500)
     finally:
-        running_tasks_map.pop(key, None)
+        pop_from_heartbeat(key)
         return response
 
 
@@ -169,20 +204,32 @@ def set_task_instance_to_running(ti):
 
 
 async def on_shutdown(app):
-    global heartbeat_loop_task
-    heartbeat_loop_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await heartbeat_loop_task  # await for task cancellation
+    global _heartbeat
+    _heartbeat.join()
+    _heartbeat.terminate()
+
+
+@provide_session
+def create_heartbeat_process(session=None):
+    global _insert_pipe, _pop_pipe, _heartbeat
+    global loop, app, executor
+
+    _insert_pipe, child_insert_pipe = multiprocessing.Pipe()
+    _pop_pipe, child_pop_pipe = multiprocessing.Pipe()
+    _heartbeat = HeartbeatManager(child_insert_pipe, child_pop_pipe, session)
+    _heartbeat.start()
 
 
 async def create_app():
-    global heartbeat_loop_task
+    global _insert_pipe, _pop_pipe, _heartbeat
     global loop, app, executor
-    heartbeat_loop_task = asyncio.Task(heartbeat())
+
+    create_heartbeat_process()
 
     loop = asyncio.get_event_loop()
     executor = ProcessPoolExecutor()
     loop.set_default_executor(executor)
+
     app = web.Application()
     app.add_routes([web.get('/health', health), web.get('/run', run_task)])
     return app
