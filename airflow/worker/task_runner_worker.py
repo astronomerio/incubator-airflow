@@ -82,18 +82,20 @@ class HeartbeatManager(multiprocessing.Process, LoggingMixin):
         import time
         from airflow.utils import timezone
         while True:
-            print("heartbeating {}".format(timezone.utcnow()))
+            self.log.debug("heartbeating {}".format(timezone.utcnow()))
             self.num_heartbeats = self.num_heartbeats + 1
             while self.insert_pipe.poll():
                 new_key, new_val = self.insert_pipe.recv()
-                print("inserting {}".format(new_key))
+                self.log.info("inserting {} into heartbeat".format(new_key))
                 self.running_tasks_map[new_key] = new_val.construct_task_instance()
             while self.pop_pipe.poll():
                 pop_key = self.pop_pipe.recv()
-                self.running_tasks_map.pop(pop_key)
+                self.log.info("removing {} from heartbeat".format(pop_key))
+
+                self.running_tasks_map.pop(pop_key, None)
             for k, v in self.running_tasks_map.items():
                 a = v
-                logger.info("heartbeating {} at {}".format(k, timezone.utcnow()))
+                self.log.debug("heartbeating {} at {}".format(k, timezone.utcnow()))
                 a.heartbeat(session=self.session)
             time.sleep(1)
 
@@ -139,6 +141,7 @@ async def run_task(request):
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
+        logger.error(tb)
         response = web.Response(body="failed {} {}".format(e, tb), status=500)
     finally:
         pop_from_heartbeat(key)
@@ -166,7 +169,6 @@ def get_task_instance(
     task_id: str,
     subdir: str,
     execution_date: datetime,
-    try_number,
 ):
     dag = get_dag(dag_id, subdir)
 

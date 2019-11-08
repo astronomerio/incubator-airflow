@@ -102,11 +102,12 @@ class KnativeRequestLoop(multiprocessing.Process, LoggingMixin):
             return
         self.log.info("%s running %s", self.__class__.__name__, key)
         try:
+            (dag_id, task_id, execution_date, try_number) = key
             future = make_request_async(
-                key.task_id,
-                key.dag_id,
-                key.execution_date,
-                key.try_number,
+                task_id=task_id,
+                dag_id=dag_id,
+                execution_date=execution_date,
+                try_number=try_number,
                 host=self.host,
                 host_header=self.host_header)
             resp = await future
