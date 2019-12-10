@@ -2167,11 +2167,6 @@ class SchedulerJobTest(unittest.TestCase):
             except AirflowException:
                 pass
 
-        ti_tuple = six.next(six.itervalues(executor.queued_tasks))
-        (command, priority, queue, simple_ti) = ti_tuple
-        ti = simple_ti.construct_task_instance()
-        ti.task = dag_task1
-
         self.assertEqual(ti.try_number, 1)
         # At this point, scheduler has tried to schedule the task once and
         # heartbeated the executor once, which moved the state of the task from
