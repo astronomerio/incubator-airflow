@@ -33,6 +33,8 @@ python: "3.6"
 stages:
   - pre-test
   - test
+  - name: deploy
+    if: repo = astronomer/airflow AND tag IS present AND tag =~ ^v\d+[\d.]+.*\+astro
 services:
   - docker
 jobs:
@@ -155,34 +157,33 @@ jobs:
         SHOW_GENERATE_REQUIREMENTS_INSTRUCTIONS="true"
       stage: test
       script: ./scripts/ci/ci_generate_requirements.sh
-    - name: "Build production image Py2.7"
-      env: >-
-        PYTHON_MAJOR_MINOR_VERSION="2.7"
-      stage: test
-      script: ./scripts/ci/ci_build_production_image.sh
-      before_install:
-        - echo
-    - name: "Build production image Py3.5"
-      env: >-
-        PYTHON_MAJOR_MINOR_VERSION="3.5"
-      stage: test
-      script: ./scripts/ci/ci_build_production_image.sh
-      before_install:
-        - echo
-    - name: "Build production image Py3.6"
-      env: >-
-        PYTHON_MAJOR_MINOR_VERSION="3.6"
-      stage: test
-      script: ./scripts/ci/ci_build_production_image.sh
-      before_install:
-        - echo
-    - name: "Build production image Py3.7"
-      env: >-
-        PYTHON_MAJOR_MINOR_VERSION="3.7"
-      stage: test
-      script: ./scripts/ci/ci_build_production_image.sh
-      before_install:
-        - echo
+
+    - stage: deploy
+      name: Publish wheels
+      before_install: skip
+      install: skip
+      script: skip
+      before_deploy:
+        - git clone https://github.com/astronomer/pip-release-utilities.git
+        - "./scripts/ci/astronomer-release.sh"
+        - |-
+          openssl aes-256-cbc \
+          -K $encrypted_e97c699094fd_key \
+          -iv $encrypted_e97c699094fd_iv \
+          -in astronomer-prod-fec60ad8e5e2.json.enc \
+          -out astronomer-prod-fec60ad8e5e2.json -d
+      deploy:
+        provider: gcs
+        edge: true
+        bucket: "pip.astronomer.io"
+        acl: public-read
+        local_dir: ./dist
+        upload_dir: simple/apache-airflow
+        key_file: astronomer-prod-fec60ad8e5e2.json
+        on:
+          tags: true
+      after_deploy:
+        - "./pip-release-utilities/build-index-page.sh pip.astronomer.io simple/apache-airflow"
 before_install:
   - ./scripts/ci/ci_before_install.sh
 script: ./scripts/ci/ci_run_airflow_testing.sh

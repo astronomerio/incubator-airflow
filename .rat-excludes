@@ -82,3 +82,6 @@ _vendor/*
 .bash_history
 .bash_aliases
 .inputrc
+
+# Astronomer extension scripts
+astronomer-*.sh
