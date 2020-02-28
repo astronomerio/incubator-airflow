@@ -66,24 +66,6 @@ jobs:
         KUBERNETES_MODE=git_mode
         KUBERNETES_VERSION=v1.15.3
       stage: test
-    - name: "Tests [Py2.7][Kubernetes][persistent]"
-      env: >-
-        BACKEND=postgres
-        PYTHON_MAJOR_MINOR_VERSION=2.7
-        ENABLE_KIND_CLUSTER=true
-        RUNTIME=kubernetes
-        KUBERNETES_MODE=persistent_mode
-        KUBERNETES_VERSION=v1.15.3
-      stage: test
-    - name: "Tests [Py2.7][Kubernetes][git]"
-      env: >-
-        BACKEND=postgres
-        PYTHON_MAJOR_MINOR_VERSION=2.7
-        ENABLE_KIND_CLUSTER=true
-        RUNTIME=kubernetes
-        KUBERNETES_MODE=git_mode
-        KUBERNETES_VERSION=v1.15.3
-      stage: test
     - name: "Tests [Postgres9.6][Py3.6][integrations]"
       env: >-
         BACKEND=postgres
@@ -129,13 +111,6 @@ jobs:
         POSTGRES_VERSION=10
         ENABLED_INTEGRATIONS="kerberos"
       stage: test
-    - name: "Tests [Sqlite][Py2.7][integrations]"
-      env: >-
-        BACKEND=sqlite
-        PYTHON_MAJOR_MINOR_VERSION=2.7
-        ENABLED_INTEGRATIONS="cassandra kerberos mongo openldap rabbitmq redis"
-        RUN_INTEGRATION_TESTS=all
-      stage: test
     - name: "Tests [Sqlite][Py3.5]"
       env: >-
         BACKEND=sqlite
@@ -149,13 +124,6 @@ jobs:
         ENABLED_INTEGRATIONS="cassandra kerberos mongo openldap rabbitmq redis"
         RUN_INTEGRATION_TESTS=all
       stage: test
-    - name: "Tests [MySQL5.6][Py2.7][kerberos]"
-      env: >-
-        BACKEND=mysql
-        PYTHON_MAJOR_MINOR_VERSION=2.7
-        ENABLED_INTEGRATIONS="kerberos"
-        MYSQL_VERSION=5.6
-      stage: test
     - name: "Tests [MySQL5.7][Py3.6][integrations]"
       env: >-
         BACKEND=mysql
@@ -164,25 +132,12 @@ jobs:
         ENABLED_INTEGRATIONS="cassandra kerberos mongo openldap rabbitmq redis"
         RUN_INTEGRATION_TESTS=all
       stage: test
-    - name: "Tests [MySQL5.7][Py2.7][kerberos]"
-      env: >-
-        BACKEND=mysql
-        PYTHON_MAJOR_MINOR_VERSION=2.7
-        MYSQL_VERSION=5.7
-        ENABLED_INTEGRATIONS="kerberos"
-        MYSQL_VERSION=5.7
-      stage: test
     - name: "Tests [MySQL5.7][Py3.7]"
       env: >-
         BACKEND=mysql
         PYTHON_MAJOR_MINOR_VERSION=3.7
         MYSQL_VERSION=5.7
       stage: test
-    - name: "Generate requirements Py2.7"
-      env: >-
-        PYTHON_MAJOR_MINOR_VERSION=2.7
-      stage: test
-      script: ./scripts/ci/ci_generate_requirements.sh
     - name: "Generate requirements Py3.5"
       env: >-
         PYTHON_MAJOR_MINOR_VERSION=3.5
