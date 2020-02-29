@@ -118,10 +118,9 @@ class VerifyVersionCommand(Command):
             exit(info)
         import re
         # Check the version matches the expected format of 1.10.7+astro.1
-        if not re.match(r'^\d\.\d+\.\d+\+astro\.\d+$', version):
-            info = "Version: {0} does not match the expected format of '1.2.3+astro.4'".format(
-                version
-            )
+        if not re.match(r'^\d\.\d+\.\d+(\.(dev|rc)\d)?\+astro\.\d+$', version):
+            info = "Version: {0} does not match the expected format of '1.2.3+astro.4' " \
+                   "or '1.2.3.(dev|rc)4+astro.5'".format(version)
             exit(info)
 
 
