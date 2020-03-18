@@ -34,7 +34,9 @@ stages:
   - pre-test
   - test
   - name: deploy
-    if: repo = astronomer/airflow AND tag IS present AND tag =~ ^v\d+[\d.]+.*\+astro
+    if: |
+      repo = astronomer/airflow AND \
+      (( branch =~ ^v\d+[\d-]+) OR (tag IS present AND tag =~ ^v\d+[\d.]+.*\+astro ))
 services:
   - docker
 jobs:
@@ -181,7 +183,7 @@ jobs:
         upload_dir: simple/apache-airflow
         key_file: astronomer-prod-fec60ad8e5e2.json
         on:
-          tags: true
+          all_branches: true
       after_deploy:
         - "./pip-release-utilities/build-index-page.sh pip.astronomer.io simple/apache-airflow"
 before_install:
