@@ -401,8 +401,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
-
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
         username_env = {
             'name': 'GIT_SYNC_USERNAME',
             'valueFrom': {
@@ -446,7 +446,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         rev_env = {
             'name': 'GIT_SYNC_REV',
@@ -488,7 +489,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         self.assertEqual(0, pod.security_context['runAsUser'])
 
@@ -503,7 +505,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
                                                         volume_mounts=[])
         pod = worker_config.make_pod("default", "sample-uuid", "test_pod_id", "test_dag_id",
                                      "test_task_id", "2019-11-21 11:08:22.920875", 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
         expected_labels = {
             'airflow-worker': 'sample-uuid',
             'airflow_version': airflow_version.replace('+', '-'),
@@ -532,8 +535,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
-
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
         init_containers = worker_config._get_init_containers()
         git_ssh_key_file = next((x['value'] for x in init_containers[0]['env']
                                 if x['name'] == 'GIT_SSH_KEY_FILE'), None)
@@ -585,7 +588,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         self.assertTrue(pod.affinity['podAntiAffinity'] is not None)
         self.assertEqual('app',
@@ -609,7 +613,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         self.assertTrue(pod.affinity['podAntiAffinity'] is not None)
         self.assertEqual('app',
@@ -708,7 +713,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         airflow_config_volume = [
             volume for volume in pod.volumes if volume["name"] == 'airflow-config'
@@ -757,7 +763,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         airflow_config_volume = [
             volume for volume in pod.volumes if volume["name"] == 'airflow-config'
@@ -816,7 +823,8 @@ class TestKubernetesWorkerConfiguration(unittest.TestCase):
 
         pod = worker_config.make_pod("default", str(uuid.uuid4()), "test_pod_id", "test_dag_id",
                                      "test_task_id", str(datetime.utcnow()), 1, "bash -c 'ls /'",
-                                     kube_executor_config)
+                                     prestop_wait_time=0,
+                                     kube_executor_config=kube_executor_config)
 
         airflow_local_settings_volume = [
             volume for volume in pod.volumes if volume["name"] == 'airflow-local-settings'
