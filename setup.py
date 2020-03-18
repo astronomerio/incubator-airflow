@@ -110,15 +110,21 @@ class VerifyVersionCommand(Command):
 
     def run(self):
         tag = os.getenv('TRAVIS_TAG')
+        branch = os.getenv('TRAVIS_BRANCH')
 
-        if tag != "v" + version:
+        if tag and tag != "v" + version:
             info = "Git tag: {0} does not match the version of this app: v{1}".format(
                 tag, version
             )
             exit(info)
+        if branch and not version.startswith(branch.lstrip('v').replace('-', '.')):
+            info = "Git Branch: {0} does not match the version of this app: v{1}".format(
+                branch, version
+            )
+            exit(info)
         import re
         # Check the version matches the expected format of 1.10.7+astro.1
-        if not re.match(r'^\d\.\d+\.\d+(\.(dev|rc)\d)?\+astro\.\d+$', version):
+        if not re.match(r'^\d\.\d+\.\d+(\.(dev|rc)\d+)?\+astro\.\d+$', version):
             info = "Version: {0} does not match the expected format of '1.2.3+astro.4' " \
                    "or '1.2.3.(dev|rc)4+astro.5'".format(version)
             exit(info)
