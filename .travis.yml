@@ -180,12 +180,13 @@ jobs:
         bucket: "pip.astronomer.io"
         acl: public-read
         local_dir: ./dist
-        upload_dir: simple/apache-airflow
+        upload_dir: simple
         key_file: astronomer-prod-fec60ad8e5e2.json
         on:
           all_branches: true
       after_deploy:
         - "./pip-release-utilities/build-index-page.sh pip.astronomer.io simple/apache-airflow"
+        - "./pip-release-utilities/build-index-page.sh pip.astronomer.io simple/astronomer-certified"
 before_install:
   - ./scripts/ci/ci_before_install.sh
 script: ./scripts/ci/ci_run_airflow_testing.sh

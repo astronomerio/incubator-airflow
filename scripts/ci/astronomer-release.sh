@@ -27,7 +27,7 @@ if [[ -z ${TRAVIS_TAG:=} ]]; then
         export UPDATED_AIRFLOW_VERSION
         echo "Updated Airflow Version: $UPDATED_AIRFLOW_VERSION"
 
-        python3 setup.py --quiet verify compile_assets sdist bdist_wheel
+        python3 setup.py --quiet verify compile_assets sdist --dist-dir dist/apache-airflow/ bdist_wheel --dist-dir dist/apache-airflow/
     else
         echo "Version does not contain 'dev' in airflow/version.py"
         echo "Skipping build and release process"
@@ -35,7 +35,10 @@ if [[ -z ${TRAVIS_TAG:=} ]]; then
         exit 1
     fi
 elif [[ ${TRAVIS_TAG:=} == "${TRAVIS_BRANCH:=}" ]]; then
-    python3 setup.py --quiet verify compile_assets sdist bdist_wheel
+    python3 setup.py --quiet verify compile_assets sdist --dist-dir dist/apache-airflow/ bdist_wheel --dist-dir dist/apache-airflow/
 fi
 
-ls -altr dist/*
+ls -altr dist/*/*
+
+# Build the astronomer-certified release from the matching apache-airflow wheel file
+python3 astronomer-certified-setup.py bdist_wheel  --dist-dir dist/astronomer-certified dist/apache-airflow/apache_airflow-*.whl
