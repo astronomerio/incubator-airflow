@@ -85,3 +85,4 @@ _vendor/*
 
 # Astronomer extension scripts
 astronomer-*.sh
+astronomer-certified-setup.py
