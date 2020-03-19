@@ -41,4 +41,4 @@ fi
 ls -altr dist/*/*
 
 # Build the astronomer-certified release from the matching apache-airflow wheel file
-python3 astronomer-certified/setup.py bdist_wheel  --dist-dir dist/astronomer-certified dist/apache-airflow/apache_airflow-*.whl
+python3 astronomer-certified-setup.py bdist_wheel  --dist-dir dist/astronomer-certified dist/apache-airflow/apache_airflow-*.whl
