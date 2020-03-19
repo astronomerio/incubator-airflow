@@ -220,10 +220,7 @@ class KubernetesRequestFactory:
                 {'preStop':
                     {'exec':
                         {'command':
-                            ["/bin/sh",
-                             "-c",
-                             "sleep {}".format(pod.prestop_wait_time)
-                             ]
+                            ["/bin/sleep", str(pod.prestop_wait_time)]
                          }
                      }
                  }
