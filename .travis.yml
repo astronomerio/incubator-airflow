@@ -100,11 +100,11 @@ jobs:
         ENABLED_INTEGRATIONS="kerberos"
         PYTHON_VERSION=3.6
       stage: test
-    - name: "Tests [Postgres10][Py3.7][integrations]"
+    - name: "Tests [Postgres12.2][Py3.7][integrations]"
       env: >-
         BACKEND=postgres
         PYTHON_VERSION=3.6
-        POSTGRES_VERSION=10
+        POSTGRES_VERSION=12.2
         ENABLED_INTEGRATIONS="cassandra kerberos mongo openldap rabbitmq redis"
         RUN_INTEGRATION_TESTS=all
       stage: test
