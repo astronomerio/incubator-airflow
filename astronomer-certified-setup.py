@@ -53,29 +53,45 @@ def get_info_from_airflow_wheel(filepath):
     return extras, airflow_version
 
 
-def transform_airflow_version(airflow_ver):
+def transform_airflow_version(airflow_ver, build_latest_release=False):
 
     parsed = Version(airflow_ver)
 
     ver = '.'.join(str(x) for x in parsed.release)
 
-    if parsed.local:
-        local = parsed._version.local[1]
-        ver += '-' + str(local)
+    if not build_latest_release:
+        if parsed.local:
+            local = parsed._version.local[1]
+            ver += '-' + str(local)
 
-    if parsed.is_devrelease:
-        ver += '.dev' + str(parsed.dev)
+        if parsed.is_devrelease:
+            ver += '.dev' + str(parsed.dev)
 
     return ver
 
 
-if not sys.argv[-1].endswith('.whl'):
-    exit('Must pass path to apache-airflow .whl file as last argument')
+build_latest = False
 
-extras, airflow_version = get_info_from_airflow_wheel(sys.argv[-1])
+if sys.argv[-1] == 'build-latest':
+    if not sys.argv[-2].endswith('.whl'):
+        exit('Must pass path to apache-airflow .whl file before "build-latest"')
+    build_latest = True
+    sys.argv.pop()
+    path_to_airflow_wheel = str(sys.argv[-1])
+else:
+    if not sys.argv[-1].endswith('.whl'):
+        exit('Must pass path to apache-airflow .whl file as last argument')
+    path_to_airflow_wheel = str(sys.argv[-1])
 sys.argv.pop()
 
-version = transform_airflow_version(airflow_version)
+extras, airflow_version = get_info_from_airflow_wheel(path_to_airflow_wheel)
+
+version = transform_airflow_version(airflow_version, build_latest)
+
+if build_latest:
+    required_airflow_version = "apache-airflow~=" + version
+else:
+    required_airflow_version = "apache-airflow==" + airflow_version
 
 setup(
     name='astronomer-certified',
@@ -84,7 +100,7 @@ setup(
     version=version,
     url='https://www.astronomer.io/docs/ac-local/',
     install_requires=[
-        'apache-airflow==' + airflow_version,
+        required_airflow_version
     ],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
