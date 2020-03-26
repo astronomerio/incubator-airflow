@@ -59,13 +59,15 @@ def transform_airflow_version(airflow_ver, build_latest_release=False):
 
     ver = '.'.join(str(x) for x in parsed.release)
 
-    if not build_latest_release:
-        if parsed.local:
-            local = parsed._version.local[1]
-            ver += '-' + str(local)
+    if build_latest_release:
+        return ver
 
-        if parsed.is_devrelease:
-            ver += '.dev' + str(parsed.dev)
+    if parsed.local:
+        local = parsed._version.local[1]
+        ver += '-' + str(local)
+
+    if parsed.is_devrelease:
+        ver += '.dev' + str(parsed.dev)
 
     return ver
 
