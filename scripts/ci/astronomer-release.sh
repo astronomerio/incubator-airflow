@@ -36,6 +36,8 @@ if [[ -z ${TRAVIS_TAG:=} ]]; then
     fi
 elif [[ ${TRAVIS_TAG:=} == "${TRAVIS_BRANCH:=}" ]]; then
     python3 setup.py --quiet verify compile_assets sdist --dist-dir dist/apache-airflow/ bdist_wheel --dist-dir dist/apache-airflow/
+    # Build a point release for CA (Example 1.10.7 for apache_airflow-1!1.10.7+astro.6)
+    python3 astronomer-certified-point-release-setup.py bdist_wheel --dist-dir dist/astronomer-certified dist/apache-airflow/apache_airflow-*.whl
 fi
 
 ls -altr dist/*/*
