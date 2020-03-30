@@ -55,4 +55,4 @@ echo "Airflow Base Version: $AIRFLOW_BASE_VESION"
 
 # Store the latest version info in a separate file
 # Example: 'dist/astronomer-certified/latest-1.10.7.build' contains '1.10.7.post7'
-echo "${CURRENT_AC_VERSION}" > dist/astronomer-certified/latest-"$AIRFLOW_BASE_VESION".build
+echo "${CURRENT_AC_VERSION}" > astronomer-certified/latest-"$AIRFLOW_BASE_VESION".build
