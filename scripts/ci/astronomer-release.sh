@@ -46,7 +46,7 @@ python3 astronomer-certified-setup.py bdist_wheel  --dist-dir dist/astronomer-ce
 # Get the version of AC (Example 1.10.7.post7)
 CURRENT_AC_VERSION=$(echo dist/astronomer-certified/astronomer_certified-*.whl | sed -E 's|.*astronomer_certified-(.+)-py2.py3-none-any.whl|\1|')
 export CURRENT_AC_VERSION
-echo "CA Version: $CURRENT_AC_VERSION"
+echo "AC Version: $CURRENT_AC_VERSION"
 
 # Get the version of Apache Airflow (Example 1.10.7)
 AIRFLOW_BASE_VESION=$(echo "$CURRENT_AC_VERSION" | sed -E 's|([0-9]+\.[0-9]+\.[0-9]+).*|\1|')
