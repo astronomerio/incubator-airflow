@@ -42,3 +42,17 @@ ls -altr dist/*/*
 
 # Build the astronomer-certified release from the matching apache-airflow wheel file
 python3 astronomer-certified-setup.py bdist_wheel  --dist-dir dist/astronomer-certified dist/apache-airflow/apache_airflow-*.whl
+
+# Get the version of CA (Example 1.10.7.post7)
+CURRENT_CA_VERSION=$(echo dist/astronomer-certified/astronomer_certified-*.whl | sed -E 's|.*astronomer_certified-(.+)-py2.py3-none-any.whl|\1|')
+export CURRENT_CA_VERSION
+echo "CA Version: $CURRENT_CA_VERSION"
+
+# Get the version of Apache Airflow (Example 1.10.7)
+AIRFLOW_BASE_VESION=$(echo "$CURRENT_CA_VERSION" | sed -E 's|([0-9]+\.[0-9]+\.[0-9]+).*|\1|')
+export AIRFLOW_BASE_VESION
+echo "Airflow Base Version: $AIRFLOW_BASE_VESION"
+
+# Store the latest version info in a separate file
+# Example: 'dist/astronomer-certified/latest-1.10.7.build' contains '1.10.7.post7'
+echo "${CURRENT_CA_VERSION}" > dist/astronomer-certified/latest-"$AIRFLOW_BASE_VESION".build
