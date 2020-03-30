@@ -156,24 +156,37 @@ jobs:
       install: skip
       script: skip
       before_deploy:
-        - git clone https://github.com/astronomer/pip-release-utilities.git
-        - "./scripts/ci/astronomer-release.sh"
         - |-
-          openssl aes-256-cbc \
-          -K $encrypted_e97c699094fd_key \
-          -iv $encrypted_e97c699094fd_iv \
-          -in astronomer-prod-fec60ad8e5e2.json.enc \
-          -out astronomer-prod-fec60ad8e5e2.json -d
+          if [[ ! -d "pip-release-utilities" ]]; then
+            git clone https://github.com/astronomer/pip-release-utilities.git
+            "./scripts/ci/astronomer-release.sh"
+            openssl aes-256-cbc \
+              -K $encrypted_e97c699094fd_key \
+              -iv $encrypted_e97c699094fd_iv \
+              -in astronomer-prod-fec60ad8e5e2.json.enc \
+              -out astronomer-prod-fec60ad8e5e2.json -d
+          fi
       deploy:
-        provider: gcs
-        edge: true
-        bucket: "pip.astronomer.io"
-        acl: public-read
-        local_dir: ./dist
-        upload_dir: simple
-        key_file: astronomer-prod-fec60ad8e5e2.json
-        on:
-          all_branches: true
+        - provider: gcs
+          edge: true
+          bucket: "pip.astronomer.io"
+          acl: public-read
+          local_dir: ./dist
+          upload_dir: simple
+          key_file: astronomer-prod-fec60ad8e5e2.json
+          on:
+            all_branches: true
+        - provider: gcs
+          edge: true
+          bucket: "pip.astronomer.io"
+          acl: public-read
+          local_dir: ./
+          upload_dir: simple
+          key_file: astronomer-prod-fec60ad8e5e2.json
+          glob: "**/*.build"
+          cache_control: max-age=0
+          on:
+            all_branches: true
       after_deploy:
         - "./pip-release-utilities/build-index-page.sh pip.astronomer.io simple/apache-airflow"
         - "./pip-release-utilities/build-index-page.sh pip.astronomer.io simple/astronomer-certified"
