@@ -181,7 +181,8 @@ jobs:
           local_dir: ./
           upload_dir: simple
           key_file: astronomer-prod-fec60ad8e5e2.json
-          glob: "**/*.build"
+          file_glob: true
+          file: "**/*.build"
           cache_control: max-age=0
           on:
             all_branches: true
