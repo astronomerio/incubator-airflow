@@ -647,7 +647,7 @@ class CoreTest(unittest.TestCase):
         test_key = 'test_key'
         Variable.set(test_key, test_value)
         Variable.set(test_key, '')
-        self.assertEqual(None, Variable.get('test_key'))
+        self.assertEqual('', Variable.get('test_key'))
 
     def test_variable_set_get_round_trip_json(self):
         value = {"a": 17, "b": 47}
