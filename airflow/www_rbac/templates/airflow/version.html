@@ -26,10 +26,10 @@
     <h2>{{ title }}</h2>
     {% if airflow_version %}
       {% set airflow_non_local_version = airflow_version.split('.dev')[0].split('+astro')[0] %}
-      {% set ac_non_post_version = airflow_version.split('+astro')[0].split('.post')[0] | replace('.', '-') %}
+      {% set ac_url_version = airflow_non_local_version | replace('.', '-') %}
         <h4>Astronomer Certified
           {% if 'dev' not in ac_version %}
-            <a href="https://www.astronomer.io/downloads/ac/v{{ ac_non_post_version }}"
+            <a href="https://www.astronomer.io/downloads/ac/v{{ ac_url_version }}"
                style="font-weight: bold; color:sienna">
               {{ ac_version }}
             </a>
