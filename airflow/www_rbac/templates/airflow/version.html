@@ -24,11 +24,15 @@
 {% block content %}
     {{ super() }}
     <h2>{{ title }}</h2>
-  {% set version_label = 'Version' %}
     {% if airflow_version %}
-        <h4>{{ version_label }} : <a href="https://pypi.python.org/pypi/apache-airflow/{{ airflow_version }}">{{ airflow_version }}</a></h4>
+        <h4>Airflow Version : <a href="https://pip.astronomer.io/simple/apache-airflow/">{{ airflow_version }}</a></h4>
     {% else %}
-        <h4>{{ version_label }} : Not Available</h4>
+        <h4>Airflow Version : Not Available</h4>
+    {% endif %}
+    {% if ac_version %}
+        <h4>AC Version : <a href="https://pip.astronomer.io/simple/astronomer-certified/">{{ ac_version }}</a></h4>
+    {% else %}
+        <h4>AC Version : Not Available</h4>
     {% endif %}
   <h4>Git Version :{% if git_version %} {{ git_version }} {% else %} Not Available {% endif %}</h4>
     <hr>

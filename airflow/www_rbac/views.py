@@ -30,6 +30,7 @@ from collections import defaultdict
 from datetime import timedelta
 from urllib.parse import unquote
 
+import pkg_resources
 import six
 from six.moves.urllib.parse import quote
 
@@ -2132,12 +2133,22 @@ class VersionView(AirflowBaseView):
         except Exception as e:
             logging.error(e)
 
+        try:
+            ac_version = pkg_resources.get_distribution('astronomer-certified').version
+        except pkg_resources.DistributionNotFound:
+            # Try to work out ac_version from airflow version
+            if airflow_version:
+                ac_version = airflow_version.replace('+astro.', '-')
+            else:
+                ac_version = None
+
         # Render information
         title = "Version Info"
         return self.render_template(
             'airflow/version.html',
             title=title,
             airflow_version=airflow_version,
+            ac_version=ac_version,
             git_version=git_version)
 
 
