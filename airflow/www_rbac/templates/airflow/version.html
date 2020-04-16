@@ -26,21 +26,25 @@
     <h2>{{ title }}</h2>
     {% if airflow_version %}
       {% set airflow_non_local_version = airflow_version.split('.dev')[0].split('+astro')[0] %}
-        <h4>Airflow Version : <a href="https://pypi.python.org/pypi/apache-airflow/{{ airflow_non_local_version }}">{{ airflow_version }}</a></h4>
+      {% set ac_non_post_version = ac_version.split('.post')[0] | replace('.', '-') %}
+        <h4>Astronomer Certified
+          {% if 'dev' not in ac_version %}
+            <a href="https://www.astronomer.io/downloads/ac/v{{ ac_non_post_version }}"
+               style="font-weight: bold; color:sienna">
+              {{ ac_version }}
+            </a>
+          {% else %}
+            <span style="font-weight: bold; color:sienna">{{ ac_version }}</span>
+          {% endif %}
+          based on Apache Airflow
+          <a href="https://pypi.python.org/pypi/apache-airflow/{{ airflow_non_local_version }}"
+             style="font-weight: bold; color:sienna">
+            {{ airflow_non_local_version }}
+          </a>
+        </h4>
     {% else %}
         <h4>Airflow Version : Not Available</h4>
     {% endif %}
-    {% if ac_version %}
-        {% if 'dev' not in ac_version %}
-        {% set ac_non_post_version = ac_version.split('.post')[0] | replace('.', '-') %}
-        <h4>AC Version : <a href="https://www.astronomer.io/downloads/ac/v{{ ac_non_post_version }}">{{ ac_version }}</a></h4>
-        {% else %}
-        <h4>AC Version : {{ ac_version }}</h4>
-        {% endif %}
-    {% else %}
-        <h4>AC Version : Not Available</h4>
-    {% endif %}
-  <h4>Git Version :{% if git_version %} {{ git_version }} {% else %} Not Available {% endif %}</h4>
     <hr>
 
 {% endblock %}
