@@ -25,8 +25,6 @@
     {{ super() }}
     <h2>{{ title }}</h2>
     {% if airflow_version %}
-      {% set airflow_non_local_version = airflow_version.split('.dev')[0].split('+astro')[0] %}
-      {% set ac_url_version = airflow_non_local_version | replace('.', '-') %}
         <h4>Astronomer Certified
           {% if 'dev' not in ac_version %}
             <a href="https://www.astronomer.io/downloads/ac/v{{ ac_url_version }}"
@@ -37,9 +35,9 @@
             <span style="font-weight: bold; color:sienna">{{ ac_version }}</span>
           {% endif %}
           based on Apache Airflow
-          <a href="https://pypi.python.org/pypi/apache-airflow/{{ airflow_non_local_version }}"
+          <a href="https://pypi.python.org/pypi/apache-airflow/{{ airflow_upstream_version }}"
              style="font-weight: bold; color:sienna">
-            {{ airflow_non_local_version }}
+            {{ airflow_upstream_version }}
           </a>
         </h4>
     {% else %}

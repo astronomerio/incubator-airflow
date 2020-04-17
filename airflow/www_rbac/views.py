@@ -2120,8 +2120,12 @@ class VersionView(AirflowBaseView):
     def version(self):
         try:
             airflow_version = airflow.__version__
+            airflow_upstream_version = airflow_version.split('.dev')[0].split('+astro')[0]
+            ac_url_version = airflow_upstream_version.replace('.', '-')
         except Exception as e:
             airflow_version = None
+            airflow_upstream_version = None
+            ac_url_version = None
             logging.error(e)
 
         # Get the Git repo and git hash
@@ -2149,6 +2153,8 @@ class VersionView(AirflowBaseView):
             title=title,
             airflow_version=airflow_version,
             ac_version=ac_version,
+            airflow_upstream_version=airflow_upstream_version,
+            ac_url_version=ac_url_version,
             git_version=git_version)
 
 
