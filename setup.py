@@ -408,7 +408,7 @@ devel = [
     'contextdecorator;python_version<"3.4"',
     'coverage',
     'dumb-init>=1.2.2',
-    'flake8>=3.6.0',
+    'flake8>=3.6.0, <3.8.0',
     'flake8-colors',
     'flaky',
     'freezegun',
