@@ -80,7 +80,7 @@ class PluginsTestRBAC(unittest.TestCase):
         Test that Airflow does not raise an Error if there is any Exception because of the
         Plugin.
         """
-        from airflow.plugins_manager import load_entrypoint_plugins
+        from airflow.plugins_manager import load_entrypoint_plugins, import_errors
 
         mock_entrypoint = mock.Mock()
         mock_entrypoint.name = 'test-entrypoint'
@@ -95,3 +95,4 @@ class PluginsTestRBAC(unittest.TestCase):
             assert "Traceback (most recent call last):" in received_logs
             assert "Version Conflict" in received_logs
             assert "Failed to import plugin test-entrypoint" in received_logs
+            assert ('test.plugins.test_plugins_manager', 'Version Conflict') in import_errors.items()

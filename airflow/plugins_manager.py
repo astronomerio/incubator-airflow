@@ -99,6 +99,7 @@ def load_entrypoint_plugins(entry_points, airflow_plugins):
     :type airflow_plugins: list[type[airflow.plugins_manager.AirflowPlugin]]
     :rtype: list[airflow.plugins_manager.AirflowPlugin]
     """
+    global import_errors  # pylint: disable=global-statement
     for entry_point in entry_points:
         log.debug('Importing entry_point plugin %s', entry_point.name)
         try:
@@ -107,8 +108,9 @@ def load_entrypoint_plugins(entry_points, airflow_plugins):
                 if callable(getattr(plugin_obj, 'on_load', None)):
                     plugin_obj.on_load()
                     airflow_plugins.append(plugin_obj)
-        except Exception:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             log.exception("Failed to import plugin %s", entry_point.name)
+            import_errors[entry_point.module_name] = str(e)
     return airflow_plugins
 
 
