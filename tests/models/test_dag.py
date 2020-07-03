@@ -805,11 +805,12 @@ class DagTest(unittest.TestCase):
             dag_id,
             is_paused_upon_creation=True,
         )
-        dag.fileloc = dag_fileloc
         session = settings.Session()
         dag.sync_to_db(session=session)
 
         orm_dag = session.query(DagModel).filter(DagModel.dag_id == dag_id).one()
+        orm_dag.fileloc = dag_fileloc
+        session.merge(orm_dag)
 
         self.assertTrue(orm_dag.is_active)
         self.assertEqual(orm_dag.fileloc, dag_fileloc)
