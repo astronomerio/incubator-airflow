@@ -698,7 +698,7 @@
       version_added: ~
       type: string
       example: ~
-      default: "30"
+      default: "0"
     - name: secret_key
       description: |
         Secret key used to run your flask app
