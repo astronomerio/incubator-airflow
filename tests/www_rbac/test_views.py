@@ -656,6 +656,7 @@ class TestAirflowBaseViews(TestBase):
         self.check_content_not_in_response('Failed to load file', resp)
         self.check_content_in_response('example_bash_operator', resp)
 
+    @unittest.skipIf(settings.STORE_SERIALIZED_DAGS, reason="DAG Serialization is enabled")
     def test_code_no_file(self):
         url = 'code?dag_id=example_bash_operator'
         mock_open_patch = mock.mock_open(read_data='')
