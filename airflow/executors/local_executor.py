@@ -265,7 +265,7 @@ class LocalExecutor(BaseExecutor):
             self.queue.join()
             self.executor.sync()
 
-    def start(self) -> None:
+    def start(self, job_id=None) -> None:
         """Starts the executor"""
         self.manager = Manager()
         self.result_queue = self.manager.Queue()

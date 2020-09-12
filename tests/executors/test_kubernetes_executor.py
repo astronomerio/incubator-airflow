@@ -30,7 +30,7 @@ from tests.test_utils.config import conf_vars
 try:
     from kubernetes.client.rest import ApiException
 
-    from airflow.executors.kubernetes_executor import AirflowKubernetesScheduler, KubernetesExecutor
+    from airflow.executors.kubernetes_executor import AirflowKubernetesScheduler, KubernetesExecutor, _create_pod_id
     from airflow.kubernetes import pod_generator
     from airflow.kubernetes.pod_generator import PodGenerator
     from airflow.utils.state import State
@@ -84,7 +84,7 @@ class TestAirflowKubernetesScheduler(unittest.TestCase):
     def test_create_pod_id(self):
         for dag_id, task_id in self._cases():
             pod_name = PodGenerator.make_unique_pod_id(
-                AirflowKubernetesScheduler._create_pod_id(dag_id, task_id)
+                _create_pod_id(dag_id, task_id)
             )
             self.assertTrue(self._is_valid_pod_id(pod_name))
 

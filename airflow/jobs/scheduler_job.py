@@ -1562,6 +1562,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             # TODO: should we fail RUNNING as well, as we do in Backfills?
             if state == State.QUEUED:
                 ti.external_executor_id = info
+                self.log.info("Setting external_id for %s to %s", ti, info)
                 continue
 
             if ti.try_number == buffer_key.try_number and ti.state == State.QUEUED:
@@ -1601,7 +1602,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         )
 
         try:
-            self.executor.start()
+            self.executor.start(self.id)
 
             self.log.info("Resetting orphaned tasks for active dag runs")
             self.adopt_or_reset_orphaned_tasks()

@@ -37,6 +37,6 @@ from airflow.models.variable import Variable
 from airflow.models.xcom import XCOM_RETURN_KEY, XCom
 
 try:
-    from airflow.models.kubernetes import KubeResourceVersion, KubeWorkerIdentifier
+    from airflow.models.kubernetes import KubeResourceVersion
 except ImportError:
     pass

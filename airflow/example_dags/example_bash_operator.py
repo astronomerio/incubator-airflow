@@ -56,7 +56,7 @@ run_this >> run_this_last
 for i in range(3):
     task = BashOperator(
         task_id='runme_' + str(i),
-        bash_command='echo "{{ task_instance_key_str }}" && sleep 1',
+        bash_command='echo "{{ task_instance_key_str }}" && sleep 60',
         dag=dag,
     )
     task >> run_this

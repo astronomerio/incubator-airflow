@@ -63,7 +63,7 @@ class BaseExecutor(LoggingMixin):
         self.running: Set[TaskInstanceKey] = set()
         self.event_buffer: Dict[TaskInstanceKey, EventBufferValueType] = {}
 
-    def start(self):  # pragma: no cover
+    def start(self, job_id=None):  # pragma: no cover
         """
         Executors may need to get things started.
         """

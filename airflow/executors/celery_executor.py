@@ -152,7 +152,7 @@ class CeleryExecutor(BaseExecutor):
             seconds=conf.getint('celery', 'task_adoption_timeout', fallback=600)
         )
 
-    def start(self) -> None:
+    def start(self, job_id=None) -> None:
         self.log.debug(
             'Starting Celery Executor using %s processes for syncing',
             self._sync_parallelism

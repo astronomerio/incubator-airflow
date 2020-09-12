@@ -28,59 +28,86 @@ from airflow.utils.session import provide_session
 class KubeResourceVersion(Base):
     """Table containing Kubernetes Resource versions"""
     __tablename__ = "kube_resource_version"
-    one_row_id = Column(Boolean, server_default=sqltrue(), primary_key=True)
-    resource_version = Column(String(255))
+    scheduler_job_id = Column(String(255))
+    resource_version = Column(String(255), primary_key=True)
+
+    def __init__(self, scheduler_id, resource_version):
+        self.scheduler_job_id = scheduler_id
+        self.resource_version = resource_version
 
     @staticmethod
     @provide_session
-    def get_current_resource_version(session: Session = None) -> str:
+    def get_current_resource_version(scheduler_job_id, session: Session = None) -> str:
         """Get Current Kubernetes Resource Version from Airflow Metadata DB"""
-        (resource_version,) = session.query(KubeResourceVersion.resource_version).one()
-        return resource_version
+        row = session.query(KubeResourceVersion) \
+            .filter(KubeResourceVersion.scheduler_job_id == str(scheduler_job_id)).one_or_none()
+        if row:
+            _, resource_version = row
+            print("found resource_version {}".format(resource_version))
+            return resource_version
+        else:
+            print(f"adding resource version for scheduler_id {scheduler_job_id}")
+            resource_version = KubeResourceVersion(str(scheduler_job_id), '0')
+            session.add(resource_version)
+            session.commit()
+            return '0'
 
     @staticmethod
     @provide_session
-    def checkpoint_resource_version(resource_version, session: Session = None) -> None:
+    def checkpoint_resource_version(
+        scheduler_job_id,
+        resource_version,
+        session: Session = None) -> None:
         """Update Kubernetes Resource Version in Airflow Metadata DB"""
         if resource_version:
-            session.query(KubeResourceVersion).update({
+            session.query(KubeResourceVersion) \
+                .filter(KubeResourceVersion.scheduler_job_id == str(scheduler_job_id))  \
+                .update({
                 KubeResourceVersion.resource_version: resource_version
             })
             session.commit()
 
     @staticmethod
     @provide_session
-    def reset_resource_version(session: Session = None) -> str:
+    def reset_resource_version(scheduler_job_id, session: Session = None) -> str:
         """Reset Kubernetes Resource Version to 0 in Airflow Metadata DB"""
-        session.query(KubeResourceVersion).update({
+        session.query(KubeResourceVersion) \
+            .filter(KubeResourceVersion.scheduler_job_id == str(scheduler_job_id)) \
+            .update({
             KubeResourceVersion.resource_version: '0'
         })
         session.commit()
         return '0'
 
 
-class KubeWorkerIdentifier(Base):
-    """Table containing Kubernetes Worker Identified"""
-    __tablename__ = "kube_worker_uuid"
-    one_row_id = Column(Boolean, server_default=sqltrue(), primary_key=True)
-    worker_uuid = Column(String(255))
-
-    @staticmethod
-    @provide_session
-    def get_or_create_current_kube_worker_uuid(session: Session = None) -> str:
-        """Create & Store Worker UUID in DB if it doesn't exists in DB, retrieve otherwise"""
-        (worker_uuid,) = session.query(KubeWorkerIdentifier.worker_uuid).one()
-        if worker_uuid == '':
-            worker_uuid = str(uuid.uuid4())
-            KubeWorkerIdentifier.checkpoint_kube_worker_uuid(worker_uuid, session)
-        return worker_uuid
-
-    @staticmethod
-    @provide_session
-    def checkpoint_kube_worker_uuid(worker_uuid: str, session: Session = None) -> None:
-        """Update the Kubernetes Worker UUID in the DB"""
-        if worker_uuid:
-            session.query(KubeWorkerIdentifier).update({
-                KubeWorkerIdentifier.worker_uuid: worker_uuid
-            })
-            session.commit()
+# class KubeWorkerIdentifier(Base):
+#     """Table containing Kubernetes Worker Identified"""
+#     __tablename__ = "kube_worker_uuid"
+#     scheduler_job_id = Column(String(255))
+#     worker_uuid = Column(String(255))
+#
+#     @staticmethod
+#     @provide_session
+#     def get_or_create_current_kube_worker_uuid(session: Session = None, job_id) -> str:
+#         """Create & Store Worker UUID in DB if it doesn't exists in DB, retrieve otherwise"""
+#         rows = session.query(KubeWorkerIdentifier.worker_uuid).filter(
+#             KubeWorkerIdentifier.scheduler_job_id == job_id,
+#         ).all()
+#         if len(rows) == 0:
+#             while True:
+#                 worker_uuid = str(uuid.uuid4())
+#                 KubeWorkerIdentifier.checkpoint_kube_worker_uuid(worker_uuid, session)
+#
+#         if worker_uuid == '':
+#             worker_uuid = str(uuid.uuid4())
+#         return worker_uuid
+#
+#     @staticmethod
+#     @provide_session
+#     def checkpoint_kube_worker_uuid(worker_uuid: str, session: Session = None) -> None:
+#         """Update the Kubernetes Worker UUID in the DB"""
+#         if worker_uuid:
+#             session.query(KubeWorkerIdentifier).update({
+#                 KubeWorkerIdentifier.worker_uuid: worker_uuid
+#             })
+#             session.commit()
