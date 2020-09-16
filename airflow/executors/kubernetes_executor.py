@@ -689,30 +689,51 @@ class KubernetesExecutor(BaseExecutor, LoggingMixin):
         }
         kube_client: client.CoreV1Api = self.kube_client
         for worker_uuid in worker_uuids:
-            kwargs = {'label_selector': 'airflow-worker={}'.format(worker_uuid)}
+            kwargs = {
+                'label_selector': 'airflow-worker={}'.format(worker_uuid)
+            }
             pod_list = kube_client.list_namespaced_pod(
-                namespace=self.kube_config.kube_namespace, **kwargs)
+                namespace=self.kube_config.kube_namespace,
+                **kwargs
+            )
             for pod in pod_list.items:
-                self.log.info("attempting to adopt pod %s", pod.metadata.name)
-                pod.metadata.labels['airflow-worker'] = str(self.worker_uuid)
-                dag_id = pod.metadata.labels['dag_id']
-                task_id = pod.metadata.labels['task_id']
-
-                try:
-                    kube_client.patch_namespaced_pod(
-                        name=pod.metadata.name,
-                        namespace=pod.metadata.namespace,
-                        body=PodGenerator.serialize_pod(pod),
-                    )
-                    pod_ids.pop(_create_pod_id(dag_id=dag_id, task_id=task_id))
-                except ApiException as e:
-                    self.log.info("failed to adopt pod %s. reason: %s", pod.metadata.name, e)
+                self.adopt_launched_task(kube_client, pod, pod_ids)
         tis_to_flush.extend(pod_ids.values())
         if self.kube_config.delete_worker_pods:
             self._adopt_completed_pods(kube_client)
         return tis_to_flush
 
+    def adopt_launched_task(self, kube_client, pod, pod_ids: dict):
+        """
+
+        Patch existing pod so that the KubernetesJobWatcher can monitor it
+        @param kube_client:
+        @param pod:
+        @param pod_ids:
+        """
+        self.log.info("attempting to adopt pod %s", pod.metadata.name)
+        pod.metadata.labels['airflow-worker'] = str(self.worker_uuid)
+        dag_id = pod.metadata.labels['dag_id']
+        task_id = pod.metadata.labels['task_id']
+        pod_id = _create_pod_id(dag_id=dag_id, task_id=task_id)
+        if pod_id not in pod_ids:
+            raise AirflowException("attempting to adopt task not specified by database")
+        try:
+            kube_client.patch_namespaced_pod(
+                name=pod.metadata.name,
+                namespace=pod.metadata.namespace,
+                body=PodGenerator.serialize_pod(pod),
+            )
+            pod_ids.pop(pod_id)
+        except ApiException as e:
+            self.log.info("failed to adopt pod %s. reason: %s", pod.metadata.name, e)
+
     def _adopt_completed_pods(self, kube_client):
+        """
+
+        Patch completed pod so that the KubernetesJobWatcher can delete it.
+        @param kube_client:
+        """
         from airflow.version import version as airflow_version
         kwargs = {
             'field_selector': "status.phase=Succeeded",
