@@ -1778,6 +1778,9 @@ class DAG(BaseDag, LoggingMixin):
         # decide when to commit
         session.flush()
 
+        for dag in dags:
+            cls.bulk_sync_to_db(dag.subdags, session=session)
+
     @provide_session
     def sync_to_db(self, session=None):
         """
