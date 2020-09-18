@@ -602,6 +602,7 @@ class DagFileProcessor(LoggingMixin):
         :rtype: Tuple[int, int]
         """
         self.log.info("Processing file %s for tasks to queue", file_path)
+        check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
 
         try:
             dagbag = DagBag(file_path, include_examples=False, include_smart_sensor=False)
@@ -635,6 +636,13 @@ class DagFileProcessor(LoggingMixin):
 
             for dag in unpaused_dags:
                 dag.pickle(session)
+
+        if check_slas:
+            try:
+                for dag_id, dag in dagbag.dags.values():
+                    self.manage_slas(dag)
+            except Exception:  # pylint: disable=broad-except
+                self.log.exception("Error Sending SLAs!")
 
         # Record import errors into the ORM
         try:
