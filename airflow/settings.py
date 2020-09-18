@@ -367,3 +367,6 @@ STORE_DAG_CODE = conf.getboolean("core", "store_dag_code", fallback=STORE_SERIAL
 DONOT_MODIFY_HANDLERS = conf.getboolean('logging', 'donot_modify_handlers', fallback=False)
 
 ALLOW_FUTURE_EXEC_DATES = conf.getboolean('scheduler', 'allow_trigger_in_future', fallback=False)
+
+# Whether or not to check each dagrun against defined SLAs
+CHECK_SLAS = conf.getboolean('core', 'check_slas', fallback=True)
