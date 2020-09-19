@@ -668,7 +668,7 @@ class TestDagFileProcessor(unittest.TestCase):
                     msg="Message"
                 )
             ]
-            dag_file_processor.execute_on_failure_callbacks(dagbag, requests)
+            dag_file_processor.execute_on_callbacks(dagbag, requests)
             mock_ti_handle_failure.assert_called_once_with(
                 "Message",
                 conf.getboolean('core', 'unit_test_mode'),
@@ -721,7 +721,7 @@ class TestDagFileProcessor(unittest.TestCase):
         dagbag.sync_to_db()
 
         serialized_dags, import_errors_count = dag_file_processor.process_file(
-            file_path=dag_file, failure_callback_requests=[]
+            file_path=dag_file, callback_requests=[]
         )
 
         dags = [SerializedDAG.from_dict(serialized_dag) for serialized_dag in serialized_dags]
@@ -751,7 +751,7 @@ class TestDagFileProcessor(unittest.TestCase):
                 self.assertIsNone(duration)
 
         dag_file_processor.process_file(
-            file_path=dag_file, failure_callback_requests=[]
+            file_path=dag_file, callback_requests=[]
         )
         with create_session() as session:
             tis = session.query(TaskInstance).all()

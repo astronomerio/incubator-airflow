@@ -52,7 +52,8 @@ from airflow.stats import Stats
 from airflow.ti_deps.dependencies_states import EXECUTION_STATES
 from airflow.utils import asciiart, timezone
 from airflow.utils.dag_processing import (
-    AbstractDagFileProcessorProcess, DagFileProcessorAgent, FailureCallbackRequest, SimpleDagBag,
+    AbstractDagFileProcessorProcess, CallbackRequests, DagFileProcessorAgent, FailureCallbackRequest,
+    SimpleDagBag, SlaCallbackRequest,
 )
 from airflow.utils.email import get_email_address_list, send_email
 from airflow.utils.log.logging_mixin import LoggingMixin, StreamLogWriter, set_context
@@ -76,8 +77,8 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
     :type pickle_dags: bool
     :param dag_ids: If specified, only look at these DAG ID's
     :type dag_ids: List[str]
-    :param failure_callback_requests: failure callback to execute
-    :type failure_callback_requests: List[airflow.utils.dag_processing.FailureCallbackRequest]
+    :param callback_requests: failure callback to execute
+    :type callback_requests: List[airflow.utils.dag_processing.CallbackRequests]
     """
 
     # Counter that increments every time an instance of this class is created
@@ -88,13 +89,13 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
         file_path: str,
         pickle_dags: bool,
         dag_ids: Optional[List[str]],
-        failure_callback_requests: List[FailureCallbackRequest]
+        callback_requests: List[CallbackRequests],
     ):
         super().__init__()
         self._file_path = file_path
         self._pickle_dags = pickle_dags
         self._dag_ids = dag_ids
-        self._failure_callback_requests = failure_callback_requests
+        self._callback_requests = callback_requests
 
         # The process that was launched to process the given .
         self._process: Optional[multiprocessing.process.BaseProcess] = None
@@ -122,7 +123,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
         pickle_dags: bool,
         dag_ids: Optional[List[str]],
         thread_name: str,
-        failure_callback_requests: List[FailureCallbackRequest]
+        callback_requests: List[CallbackRequests],
     ) -> None:
         """
         Process the given file.
@@ -139,8 +140,8 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
         :type dag_ids: list[str]
         :param thread_name: the name to use for the process that is launched
         :type thread_name: str
-        :param failure_callback_requests: failure callback to execute
-        :type failure_callback_requests: list[airflow.utils.dag_processing.FailureCallbackRequest]
+        :param callback_requests: failure callback to execute
+        :type callback_requests: List[airflow.utils.dag_processing.CallbackRequests]
         :return: the process that was launched
         :rtype: multiprocessing.Process
         """
@@ -169,7 +170,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
                 result: Tuple[int, int] = dag_file_processor.process_file(
                     file_path=file_path,
                     pickle_dags=pickle_dags,
-                    failure_callback_requests=failure_callback_requests,
+                    callback_requests=callback_requests,
                 )
                 result_channel.send(result)
                 end_time = time.time()
@@ -202,7 +203,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
                 self._pickle_dags,
                 self._dag_ids,
                 "DagFileProcessor{}".format(self._instance_id),
-                self._failure_callback_requests
+                self._callback_requests
             ),
             name="DagFileProcessor{}-Process".format(self._instance_id)
         )
@@ -534,42 +535,48 @@ class DagFileProcessor(LoggingMixin):
         session.commit()
 
     @provide_session
-    def execute_on_failure_callbacks(
+    def execute_on_callbacks(
         self,
         dagbag: DagBag,
-        failure_callback_requests: List[FailureCallbackRequest],
+        callback_requests: List[CallbackRequests],
         session: Session = None
     ) -> None:
         """
         Execute on failure callbacks. These objects can come from SchedulerJob or from
         DagFileProcessorManager.
 
-        :param failure_callback_requests: failure callbacks to execute
-        :type failure_callback_requests: List[airflow.utils.dag_processing.FailureCallbackRequest]
+        :param callback_requests: failure callbacks to execute
+        :type callback_requests: List[airflow.utils.dag_processing.CallbackRequests]
         :param session: DB session.
         """
-        for request in failure_callback_requests:
-            simple_ti = request.simple_task_instance
-            if simple_ti.dag_id in dagbag.dags:
-                dag = dagbag.dags[simple_ti.dag_id]
-                if simple_ti.task_id in dag.task_ids:
-                    task = dag.get_task(simple_ti.task_id)
-                    ti = TI(task, simple_ti.execution_date)
-                    # Get properties needed for failure handling from SimpleTaskInstance.
-                    ti.start_date = simple_ti.start_date
-                    ti.end_date = simple_ti.end_date
-                    ti.try_number = simple_ti.try_number
-                    ti.state = simple_ti.state
-                    ti.test_mode = self.UNIT_TEST_MODE
-                    ti.handle_failure(request.msg, ti.test_mode, ti.get_template_context())
-                    self.log.info('Executed failure callback for %s in state %s', ti, ti.state)
+        for request in callback_requests:
+            if isinstance(request, FailureCallbackRequest):
+                simple_ti = request.simple_task_instance
+                if simple_ti.dag_id in dagbag.dags:
+                    dag = dagbag.dags[simple_ti.dag_id]
+                    if simple_ti.task_id in dag.task_ids:
+                        task = dag.get_task(simple_ti.task_id)
+                        ti = TI(task, simple_ti.execution_date)
+                        # Get properties needed for failure handling from SimpleTaskInstance.
+                        ti.start_date = simple_ti.start_date
+                        ti.end_date = simple_ti.end_date
+                        ti.try_number = simple_ti.try_number
+                        ti.state = simple_ti.state
+                        ti.test_mode = self.UNIT_TEST_MODE
+                        ti.handle_failure(request.msg, ti.test_mode, ti.get_template_context())
+                        self.log.info('Executed failure callback for %s in state %s', ti, ti.state)
+            elif isinstance(request, SlaCallbackRequest):
+                check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
+                if check_slas:
+                    self.manage_slas(dagbag.dags.get(request.dag_id))
+
         session.commit()
 
     @provide_session
     def process_file(
         self,
         file_path: str,
-        failure_callback_requests: List[FailureCallbackRequest],
+        callback_requests: List[CallbackRequests],
         pickle_dags: bool = False,
         session: Session = None
     ) -> Tuple[int, int]:
@@ -591,8 +598,8 @@ class DagFileProcessor(LoggingMixin):
 
         :param file_path: the path to the Python file that should be executed
         :type file_path: str
-        :param failure_callback_requests: failure callback to execute
-        :type failure_callback_requests: List[airflow.utils.dag_processing.FailureCallbackRequest]
+        :param callback_requests: failure callback to execute
+        :type callback_requests: List[airflow.utils.dag_processing.CallbackRequest]
         :param pickle_dags: whether serialize the DAGs found in the file and
             save them to the db
         :type pickle_dags: bool
@@ -602,7 +609,6 @@ class DagFileProcessor(LoggingMixin):
         :rtype: Tuple[int, int]
         """
         self.log.info("Processing file %s for tasks to queue", file_path)
-        check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
 
         try:
             dagbag = DagBag(file_path, include_examples=False, include_smart_sensor=False)
@@ -619,7 +625,7 @@ class DagFileProcessor(LoggingMixin):
             return 0, len(dagbag.import_errors)
 
         try:
-            self.execute_on_failure_callbacks(dagbag, failure_callback_requests)
+            self.execute_on_callbacks(dagbag, callback_requests)
         except Exception:  # pylint: disable=broad-except
             self.log.exception("Error executing failure callback!")
 
@@ -636,13 +642,6 @@ class DagFileProcessor(LoggingMixin):
 
             for dag in unpaused_dags:
                 dag.pickle(session)
-
-        if check_slas:
-            try:
-                for dag_id, dag in dagbag.dags.values():
-                    self.manage_slas(dag)
-            except Exception:  # pylint: disable=broad-except
-                self.log.exception("Error Sending SLAs!")
 
         # Record import errors into the ORM
         try:
@@ -1250,7 +1249,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
     @staticmethod
     def _create_dag_file_processor(
         file_path: str,
-        failure_callback_requests: List[FailureCallbackRequest],
+        callback_requests: List[CallbackRequests],
         dag_ids: Optional[List[str]],
         pickle_dags: bool
     ) -> DagFileProcessorProcess:
@@ -1261,7 +1260,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             file_path=file_path,
             pickle_dags=pickle_dags,
             dag_ids=dag_ids,
-            failure_callback_requests=failure_callback_requests
+            callback_requests=callback_requests
         )
 
     def _run_scheduler_loop(self) -> None:
@@ -1529,8 +1528,22 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         ).update({TI.state: State.SCHEDULED}, synchronize_session=False)
 
         # TODO[HA]: Manage SLAs
+        self._manage_slas(dag_run.dag)
 
         return count
+
+    def _manage_slas(self, dag: DAG):
+        if not any([isinstance(ti.sla, timedelta) for ti in dag.tasks]):
+            self.log.info("Skipping SLA check for %s because no tasks in DAG have SLAs", dag)
+            return
+
+        if not self.processor_agent:
+            raise ValueError("Processor agent is not started.")
+
+        self.processor_agent.send_sla_callback_request_to_execute(
+            full_filepath=dag.fileloc,
+            dag_id=dag.dag_id
+        )
 
     @provide_session
     def _emit_pool_metrics(self, session: Session = None) -> None:
