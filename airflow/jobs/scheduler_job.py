@@ -47,14 +47,14 @@ from airflow.jobs.base_job import BaseJob
 from airflow.models import DAG, DagModel, SlaMiss, errors
 from airflow.models.dagbag import DagBag
 from airflow.models.dagrun import DagRun
-from airflow.models.taskinstance import TaskInstanceKey
+from airflow.models.taskinstance import SimpleTaskInstance, TaskInstanceKey
 from airflow.stats import Stats
 from airflow.ti_deps.dependencies_states import EXECUTION_STATES
 from airflow.utils import asciiart, timezone
-from airflow.utils.dag_processing import (
-    AbstractDagFileProcessorProcess, CallbackRequests, DagFileProcessorAgent, FailureCallbackRequest,
-    SimpleDagBag, SlaCallbackRequest,
+from airflow.utils.callback_requests import (
+    CallbackRequest, DagCallbackRequest, SlaCallbackRequest, TaskCallbackRequest,
 )
+from airflow.utils.dag_processing import AbstractDagFileProcessorProcess, DagFileProcessorAgent, SimpleDagBag
 from airflow.utils.email import get_email_address_list, send_email
 from airflow.utils.log.logging_mixin import LoggingMixin, StreamLogWriter, set_context
 from airflow.utils.mixins import MultiprocessingStartMethodMixin
@@ -78,7 +78,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
     :param dag_ids: If specified, only look at these DAG ID's
     :type dag_ids: List[str]
     :param callback_requests: failure callback to execute
-    :type callback_requests: List[airflow.utils.dag_processing.CallbackRequests]
+    :type callback_requests: List[airflow.utils.callback_requests.CallbackRequest]
     """
 
     # Counter that increments every time an instance of this class is created
@@ -89,7 +89,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
         file_path: str,
         pickle_dags: bool,
         dag_ids: Optional[List[str]],
-        callback_requests: List[CallbackRequests],
+        callback_requests: List[CallbackRequest],
     ):
         super().__init__()
         self._file_path = file_path
@@ -123,7 +123,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
         pickle_dags: bool,
         dag_ids: Optional[List[str]],
         thread_name: str,
-        callback_requests: List[CallbackRequests],
+        callback_requests: List[CallbackRequest],
     ) -> None:
         """
         Process the given file.
@@ -141,7 +141,7 @@ class DagFileProcessorProcess(AbstractDagFileProcessorProcess, LoggingMixin, Mul
         :param thread_name: the name to use for the process that is launched
         :type thread_name: str
         :param callback_requests: failure callback to execute
-        :type callback_requests: List[airflow.utils.dag_processing.CallbackRequests]
+        :type callback_requests: List[airflow.utils.callback_requests.CallbackRequest]
         :return: the process that was launched
         :rtype: multiprocessing.Process
         """
@@ -367,7 +367,7 @@ class DagFileProcessor(LoggingMixin):
         We are assuming that the scheduler runs often, so we only check for
         tasks that should have succeeded in the past hour.
         """
-        if not any([isinstance(ti.sla, timedelta) for ti in dag.tasks]):
+        if not any(isinstance(ti.sla, timedelta) for ti in dag.tasks):
             self.log.info("Skipping SLA check for %s because no tasks in DAG have SLAs", dag)
             return
 
@@ -535,48 +535,65 @@ class DagFileProcessor(LoggingMixin):
         session.commit()
 
     @provide_session
-    def execute_on_callbacks(
+    def execute_callbacks(
         self,
         dagbag: DagBag,
-        callback_requests: List[CallbackRequests],
+        callback_requests: List[CallbackRequest],
         session: Session = None
     ) -> None:
         """
         Execute on failure callbacks. These objects can come from SchedulerJob or from
         DagFileProcessorManager.
 
+        :param dagbag: Dag Bag of dags
         :param callback_requests: failure callbacks to execute
-        :type callback_requests: List[airflow.utils.dag_processing.CallbackRequests]
+        :type callback_requests: List[airflow.utils.callback_requests.CallbackRequest]
         :param session: DB session.
         """
         for request in callback_requests:
-            if isinstance(request, FailureCallbackRequest):
-                simple_ti = request.simple_task_instance
-                if simple_ti.dag_id in dagbag.dags:
-                    dag = dagbag.dags[simple_ti.dag_id]
-                    if simple_ti.task_id in dag.task_ids:
-                        task = dag.get_task(simple_ti.task_id)
-                        ti = TI(task, simple_ti.execution_date)
-                        # Get properties needed for failure handling from SimpleTaskInstance.
-                        ti.start_date = simple_ti.start_date
-                        ti.end_date = simple_ti.end_date
-                        ti.try_number = simple_ti.try_number
-                        ti.state = simple_ti.state
-                        ti.test_mode = self.UNIT_TEST_MODE
-                        ti.handle_failure(request.msg, ti.test_mode, ti.get_template_context())
-                        self.log.info('Executed failure callback for %s in state %s', ti, ti.state)
+            if isinstance(request, TaskCallbackRequest) and request.is_failure_callback:
+                self._execute_task_callbacks(dagbag, request)
             elif isinstance(request, SlaCallbackRequest):
                 check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
                 if check_slas:
                     self.manage_slas(dagbag.dags.get(request.dag_id))
+            elif isinstance(request, DagCallbackRequest):
+                self._execute_dag_callbacks(dagbag, request, session)
 
         session.commit()
+
+    @provide_session
+    def _execute_dag_callbacks(self, dagbag: DagBag, request: DagCallbackRequest, session: Session):
+        dag = dagbag.dags[request.dag_id]
+        dag_run = dag.get_dagrun(execution_date=request.execution_date, session=session)
+        dag.handle_callback(
+            dagrun=dag_run,
+            success=not request.is_failure_callback,
+            reason=request.msg,
+            session=session
+        )
+
+    def _execute_task_callbacks(self, dagbag: DagBag, request: TaskCallbackRequest):
+        simple_ti = request.simple_task_instance
+        if simple_ti.dag_id in dagbag.dags:
+            dag = dagbag.dags[simple_ti.dag_id]
+            if simple_ti.task_id in dag.task_ids:
+                task = dag.get_task(simple_ti.task_id)
+                ti = TI(task, simple_ti.execution_date)
+                # Get properties needed for failure handling from SimpleTaskInstance.
+                ti.start_date = simple_ti.start_date
+                ti.end_date = simple_ti.end_date
+                ti.try_number = simple_ti.try_number
+                ti.state = simple_ti.state
+                ti.test_mode = self.UNIT_TEST_MODE
+                ti.handle_failure(request.msg, ti.test_mode, ti.get_template_context())
+                self.log.info('Executed failure callback for %s in state %s', ti, ti.state)
 
     @provide_session
     def process_file(
         self,
         file_path: str,
-        callback_requests: List[CallbackRequests],
+        callback_requests: List[CallbackRequest],
         pickle_dags: bool = False,
         session: Session = None
     ) -> Tuple[int, int]:
@@ -625,9 +642,9 @@ class DagFileProcessor(LoggingMixin):
             return 0, len(dagbag.import_errors)
 
         try:
-            self.execute_on_callbacks(dagbag, callback_requests)
+            self.execute_callbacks(dagbag, callback_requests)
         except Exception:  # pylint: disable=broad-except
-            self.log.exception("Error executing failure callback!")
+            self.log.exception("Error executing callback!")
 
         # Save individual DAGs in the ORM
         dagbag.read_dags_from_db = True
@@ -1177,11 +1194,13 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
                 msg = "Executor reports task instance %s finished (%s) although the " \
                       "task says its %s. (Info: %s) Was the task killed externally?"
                 self.log.error(msg, ti, state, ti.state, info)
-                self.processor_agent.send_callback_to_execute(
+                request = TaskCallbackRequest(
                     full_filepath=ti.dag_model.fileloc,
-                    task_instance=ti,
-                    msg=msg % (ti, state, ti.state, info),
+                    simple_task_instance=SimpleTaskInstance(ti),
+                    msg=msg % (ti, state, ti.state, info)
                 )
+
+                self.processor_agent.send_callback_to_execute(request)
 
         return len(event_buffer)
 
@@ -1249,7 +1268,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
     @staticmethod
     def _create_dag_file_processor(
         file_path: str,
-        callback_requests: List[CallbackRequests],
+        callback_requests: List[CallbackRequest],
         dag_ids: Optional[List[str]],
         pickle_dags: bool
     ) -> DagFileProcessorProcess:
@@ -1370,6 +1389,9 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             for dag_run in DagRun.next_dagruns_to_examine(session):
                 self._schedule_dag_run(dag_run, session)
 
+                # Send SLA & DAG Success/Failure Callbacks to be executed
+                self._send_dag_callbacks_to_processor(dag_run)
+
             expected_commit = True
             session.commit()
 
@@ -1487,7 +1509,13 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             # Work out if we should allow creating a new DagRun now?
             self._update_dag_next_dagrun(session.query(DagModel).get(dag_run.dag_id), dag, session)
 
-            # TODO[HA] run `dag.handle_callback` via the DagFileProcessor
+            dag_run._callback = DagCallbackRequest(
+                full_filepath=dag.fileloc,
+                dag_id=dag.dag_id,
+                execution_date=dag_run.execution_date,
+                is_failure_callback=True,
+                msg='timed_out'
+            )
 
             return 0
 
@@ -1519,7 +1547,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         # TODO[HA]: Run verify_integrity, but only if the serialized_dag has changed
 
         # TODO[HA]: Rename update_state -> schedule_dag_run, ?? something else?
-        schedulable_tis = dag_run.update_state(session=session)
+        schedulable_tis = dag_run.update_state(session=session, handle_callback=False)
         # TODO[HA]: Don't return, update these from in update_state?
         count = session.query(TI).filter(
             TI.dag_id == dag_run.dag_id,
@@ -1527,13 +1555,19 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             TI.task_id.in_(ti.task_id for ti in schedulable_tis)
         ).update({TI.state: State.SCHEDULED}, synchronize_session=False)
 
-        # TODO[HA]: Manage SLAs
-        self._manage_slas(dag_run.dag)
-
         return count
 
+    def _send_dag_callbacks_to_processor(self, dag_run: DagRun):
+        if not self.processor_agent:
+            raise ValueError("Processor agent is not started.")
+
+        dag = dag_run.get_dag()
+        self._manage_slas(dag)
+        if dag_run.callback:
+            self.processor_agent.send_callback_to_execute(dag_run.callback)
+
     def _manage_slas(self, dag: DAG):
-        if not any([isinstance(ti.sla, timedelta) for ti in dag.tasks]):
+        if not any(isinstance(ti.sla, timedelta) for ti in dag.tasks):
             self.log.info("Skipping SLA check for %s because no tasks in DAG have SLAs", dag)
             return
 

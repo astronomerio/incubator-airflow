@@ -46,7 +46,8 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.serialization.serialized_objects import SerializedDAG
 from airflow.utils import timezone
-from airflow.utils.dag_processing import FailureCallbackRequest, SimpleDagBag
+from airflow.utils.callback_requests import DagCallbackRequest, TaskCallbackRequest
+from airflow.utils.dag_processing import SimpleDagBag
 from airflow.utils.dates import days_ago
 from airflow.utils.file import list_py_file_paths
 from airflow.utils.session import create_session, provide_session
@@ -662,13 +663,13 @@ class TestDagFileProcessor(unittest.TestCase):
             session.commit()
 
             requests = [
-                FailureCallbackRequest(
+                TaskCallbackRequest(
                     full_filepath="A",
                     simple_task_instance=SimpleTaskInstance(ti),
                     msg="Message"
                 )
             ]
-            dag_file_processor.execute_on_callbacks(dagbag, requests)
+            dag_file_processor.execute_callbacks(dagbag, requests)
             mock_ti_handle_failure.assert_called_once_with(
                 "Message",
                 conf.getboolean('core', 'unit_test_mode'),
@@ -692,7 +693,7 @@ class TestDagFileProcessor(unittest.TestCase):
             session.commit()
 
             requests = [
-                FailureCallbackRequest(
+                TaskCallbackRequest(
                     full_filepath=dag.full_filepath,
                     simple_task_instance=SimpleTaskInstance(ti),
                     msg="Message"
@@ -974,8 +975,9 @@ class TestSchedulerJob(unittest.TestCase):
             old_children)
         self.assertFalse(current_children)
 
+    @mock.patch('airflow.jobs.scheduler_job.TaskCallbackRequest')
     @mock.patch('airflow.jobs.scheduler_job.Stats.incr')
-    def test_process_executor_events(self, mock_stats_incr):
+    def test_process_executor_events(self, mock_stats_incr, mock_task_callback):
         dag_id = "test_process_executor_events"
         dag_id2 = "test_process_executor_events_2"
         task_id_1 = 'dummy_task'
@@ -988,6 +990,8 @@ class TestSchedulerJob(unittest.TestCase):
         dag2.fileloc = "/test_path1/"
 
         executor = MockExecutor(do_update=False)
+        task_callback = mock.MagicMock()
+        mock_task_callback.return_value = task_callback
         scheduler = SchedulerJob(executor=executor)
         scheduler.processor_agent = mock.MagicMock()
 
@@ -1005,14 +1009,15 @@ class TestSchedulerJob(unittest.TestCase):
         scheduler._process_executor_events(session=session)
         ti1.refresh_from_db()
         self.assertEqual(ti1.state, State.QUEUED)
-        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(
+        mock_task_callback.assert_called_once_with(
             full_filepath='/test_path1/',
-            task_instance=mock.ANY,
+            simple_task_instance=mock.ANY,
             msg='Executor reports task instance '
                 '<TaskInstance: test_process_executor_events.dummy_task 2016-01-01 00:00:00+00:00 [queued]> '
                 'finished (failed) although the task says its queued. (Info: None) '
                 'Was the task killed externally?'
         )
+        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(task_callback)
         scheduler.processor_agent.reset_mock()
 
         # ti in success state
@@ -2100,14 +2105,26 @@ class TestSchedulerJob(unittest.TestCase):
         assert isinstance(orm_dag.next_dagrun, datetime.datetime)
         assert isinstance(orm_dag.next_dagrun_create_after, datetime.datetime)
 
-        # TODO[HA] Verify dag failure callback request sent to file processor
+        # Verify dag failure callback request is added to dagrun._callback
+        assert dr._callback is not None
+        assert isinstance(dr._callback, DagCallbackRequest)
+        assert dr._callback.msg == "timed_out"
+        assert dr._callback.dag_id == dr.dag_id
+        assert dr._callback.is_failure_callback
+        assert dr._callback.execution_date == dr.execution_date
+
+        # Verify dag failure callback request is sent to file processor
+        scheduler.processor_agent = mock.Mock()
+        scheduler.processor_agent.send_callback_to_execute = mock.Mock()
+        scheduler._send_dag_callbacks_to_processor(dr)
+        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr._callback)
 
         session.rollback()
         session.close()
 
     def test_dagrun_timeout_fails_run(self):
         """
-        Test if a a dagrun wil be set failed if timeout, even without max_active_runs
+        Test if a a dagrun will be set failed if timeout, even without max_active_runs
         """
         dag = DAG(
             dag_id='test_scheduler_fail_dagrun_timeout',
@@ -2133,7 +2150,7 @@ class TestSchedulerJob(unittest.TestCase):
         scheduler._create_dag_run(orm_dag, dag, session)
 
         drs = DagRun.find(dag_id=dag.dag_id, session=session)
-        assert len(drs) == 1 
+        assert len(drs) == 1
         dr = drs[0]
 
         # Should be scheduled as dagrun_timeout has passed
@@ -2146,7 +2163,19 @@ class TestSchedulerJob(unittest.TestCase):
         session.refresh(dr)
         assert dr.state == State.FAILED
 
-        # TODO[HA] Verify dag failure callback request sent to file processor
+        # Verify dag failure callback request is added to dagrun._callback
+        assert dr._callback is not None
+        assert isinstance(dr._callback, DagCallbackRequest)
+        assert dr._callback.msg == "timed_out"
+        assert dr._callback.dag_id == dr.dag_id
+        assert dr._callback.is_failure_callback
+        assert dr._callback.execution_date == dr.execution_date
+
+        # Verify dag failure callback request is sent to file processor
+        scheduler.processor_agent = mock.Mock()
+        scheduler.processor_agent.send_callback_to_execute = mock.Mock()
+        scheduler._send_dag_callbacks_to_processor(dr)
+        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr._callback)
 
         session.rollback()
         session.close()

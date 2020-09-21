@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any, List, Optional, Tuple, Union
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Index, Integer, PickleType, String, UniqueConstraint, and_, func, or_,
+    Boolean, Column, DateTime, Index, Integer, PickleType, String, UniqueConstraint, and_, func, or_, orm,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declared_attr
@@ -35,7 +35,7 @@ from airflow.settings import task_instance_mutation_hook
 from airflow.stats import Stats
 from airflow.ti_deps.dep_context import DepContext
 from airflow.ti_deps.dependencies_states import SCHEDULEABLE_STATES
-from airflow.utils import timezone
+from airflow.utils import callback_requests, timezone
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.session import provide_session
 from airflow.utils.sqlalchemy import UtcDateTime, skip_locked
@@ -101,7 +101,12 @@ class DagRun(Base, LoggingMixin):
         self.conf = conf or {}
         self.state = state
         self.run_type = run_type
+        self._callback: Optional[callback_requests.CallbackRequest] = None
         super().__init__()
+
+    @orm.reconstructor
+    def init_on_load(self):
+        self._callback: Optional[callback_requests.CallbackRequest] = None
 
     def __repr__(self):
         return (
@@ -349,13 +354,15 @@ class DagRun(Base, LoggingMixin):
         ).first()
 
     @provide_session
-    def update_state(self, session: Session = None) -> List[TI]:
+    def update_state(self, session: Session = None, handle_callback: Optional[bool] = True) -> List[TI]:
         """
         Determines the overall state of the DagRun based on the state
         of its TaskInstances.
 
         :param session: Sqlalchemy ORM Session
         :type session: Session
+        :param handle_callback: To run Dag Callbacks or not
+        :type handle_callback: bool
         :return: ready_tis: the tis that can be scheduled in the current loop
         :rtype ready_tis: list[airflow.models.TaskInstance]
         """
@@ -373,8 +380,7 @@ class DagRun(Base, LoggingMixin):
         unfinished_tasks = [t for t in tis if t.state in State.unfinished()]
         finished_tasks = [t for t in tis if t.state in State.finished() + [State.UPSTREAM_FAILED]]
         none_depends_on_past = all(not t.task.depends_on_past for t in unfinished_tasks)
-        none_task_concurrency = all(t.task.task_concurrency is None
-                                    for t in unfinished_tasks)
+        none_task_concurrency = all(t.task.task_concurrency is None for t in unfinished_tasks)
         if unfinished_tasks:
             scheduleable_tasks = [ut for ut in unfinished_tasks if ut.state in SCHEDULEABLE_STATES]
             self.log.debug(
@@ -393,16 +399,22 @@ class DagRun(Base, LoggingMixin):
         leaf_task_ids = {t.task_id for t in dag.leaves}
         leaf_tis = [ti for ti in tis if ti.task_id in leaf_task_ids]
 
-        # TODO[ha]: These callbacks shouldn't run in the scheduler loop - check if Kamil changed this to run
-        # via the dag processor!
-
         # if all roots finished and at least one failed, the run failed
         if not unfinished_tasks and any(
             leaf_ti.state in {State.FAILED, State.UPSTREAM_FAILED} for leaf_ti in leaf_tis
         ):
             self.log.error('Marking run %s failed', self)
             self.set_state(State.FAILED)
-            dag.handle_callback(self, success=False, reason='task_failure', session=session)
+            if handle_callback:
+                dag.handle_callback(self, success=False, reason='task_failure', session=session)
+            else:
+                self._callback = callback_requests.DagCallbackRequest(
+                    full_filepath=dag.fileloc,
+                    dag_id=self.dag_id,
+                    execution_date=self.execution_date,
+                    is_failure_callback=True,
+                    msg='task_failure'
+                )
 
         # if all leafs succeeded and no unfinished tasks, the run succeeded
         elif not unfinished_tasks and all(
@@ -410,15 +422,32 @@ class DagRun(Base, LoggingMixin):
         ):
             self.log.info('Marking run %s successful', self)
             self.set_state(State.SUCCESS)
-            dag.handle_callback(self, success=True, reason='success', session=session)
+            if handle_callback:
+                dag.handle_callback(self, success=True, reason='success', session=session)
+            else:
+                self._callback = callback_requests.DagCallbackRequest(
+                    full_filepath=dag.fileloc,
+                    dag_id=self.dag_id,
+                    execution_date=self.execution_date,
+                    is_failure_callback=False,
+                    msg='success'
+                )
 
         # if *all tasks* are deadlocked, the run failed
         elif (unfinished_tasks and none_depends_on_past and
               none_task_concurrency and not are_runnable_tasks):
             self.log.error('Deadlock; marking run %s failed', self)
             self.set_state(State.FAILED)
-            dag.handle_callback(self, success=False, reason='all_tasks_deadlocked',
-                                session=session)
+            if handle_callback:
+                dag.handle_callback(self, success=False, reason='all_tasks_deadlocked', session=session)
+            else:
+                self._callback = callback_requests.DagCallbackRequest(
+                        full_filepath=dag.fileloc,
+                        dag_id=self.dag_id,
+                        execution_date=self.execution_date,
+                        is_failure_callback=True,
+                        msg='all_tasks_deadlocked'
+                    )
 
         # finally, if the roots aren't done, the dag is still running
         else:
@@ -598,3 +627,7 @@ class DagRun(Base, LoggingMixin):
             .all()
         )
         return dagruns
+
+    @property
+    def callback(self) -> Optional[callback_requests.CallbackRequest]:
+        return self._callback
