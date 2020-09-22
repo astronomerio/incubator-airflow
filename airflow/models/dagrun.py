@@ -101,12 +101,12 @@ class DagRun(Base, LoggingMixin):
         self.conf = conf or {}
         self.state = state
         self.run_type = run_type
-        self._callback: Optional[callback_requests.CallbackRequest] = None
+        self._callback: Optional[callback_requests.DagCallbackRequest] = None
         super().__init__()
 
     @orm.reconstructor
     def init_on_load(self):
-        self._callback: Optional[callback_requests.CallbackRequest] = None
+        self._callback: Optional[callback_requests.DagCallbackRequest] = None
 
     def __repr__(self):
         return (
@@ -442,12 +442,12 @@ class DagRun(Base, LoggingMixin):
                 dag.handle_callback(self, success=False, reason='all_tasks_deadlocked', session=session)
             else:
                 self._callback = callback_requests.DagCallbackRequest(
-                        full_filepath=dag.fileloc,
-                        dag_id=self.dag_id,
-                        execution_date=self.execution_date,
-                        is_failure_callback=True,
-                        msg='all_tasks_deadlocked'
-                    )
+                    full_filepath=dag.fileloc,
+                    dag_id=self.dag_id,
+                    execution_date=self.execution_date,
+                    is_failure_callback=True,
+                    msg='all_tasks_deadlocked'
+                )
 
         # finally, if the roots aren't done, the dag is still running
         else:
@@ -629,5 +629,5 @@ class DagRun(Base, LoggingMixin):
         return dagruns
 
     @property
-    def callback(self) -> Optional[callback_requests.CallbackRequest]:
+    def callback(self) -> Optional[callback_requests.DagCallbackRequest]:
         return self._callback
