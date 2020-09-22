@@ -2105,13 +2105,14 @@ class TestSchedulerJob(unittest.TestCase):
         assert isinstance(orm_dag.next_dagrun, datetime.datetime)
         assert isinstance(orm_dag.next_dagrun_create_after, datetime.datetime)
 
-        # Verify dag failure callback request is added to dagrun._callback
-        assert dr._callback is not None
-        assert isinstance(dr._callback, DagCallbackRequest)
-        assert dr._callback.msg == "timed_out"
-        assert dr._callback.dag_id == dr.dag_id
-        assert dr._callback.is_failure_callback
-        assert dr._callback.execution_date == dr.execution_date
+        # Verify dag failure callback request is added to dagrun.callback
+        assert dr.callback == DagCallbackRequest(
+            full_filepath=dr.dag.fileloc,
+            dag_id=dr.dag_id,
+            is_failure_callback=True,
+            execution_date=dr.execution_date,
+            msg="timed_out"
+        )
 
         # Verify dag failure callback request is sent to file processor
         scheduler.processor_agent = mock.Mock()
@@ -2163,13 +2164,14 @@ class TestSchedulerJob(unittest.TestCase):
         session.refresh(dr)
         assert dr.state == State.FAILED
 
-        # Verify dag failure callback request is added to dagrun._callback
-        assert dr._callback is not None
-        assert isinstance(dr._callback, DagCallbackRequest)
-        assert dr._callback.msg == "timed_out"
-        assert dr._callback.dag_id == dr.dag_id
-        assert dr._callback.is_failure_callback
-        assert dr._callback.execution_date == dr.execution_date
+        # Verify dag failure callback request is added to dagrun.callback
+        assert dr.callback == DagCallbackRequest(
+            full_filepath=dr.dag.fileloc,
+            dag_id=dr.dag_id,
+            is_failure_callback=True,
+            execution_date=dr.execution_date,
+            msg="timed_out"
+        )
 
         # Verify dag failure callback request is sent to file processor
         scheduler.processor_agent = mock.Mock()
