@@ -2096,6 +2096,10 @@ class TestSchedulerJob(unittest.TestCase):
         dr.start_date = timezone.utcnow() - datetime.timedelta(days=1)
         session.flush()
 
+        # Mock that processor_agent is started
+        scheduler.processor_agent = mock.Mock()
+        scheduler.processor_agent.send_callback_to_execute = mock.Mock()
+
         scheduler._schedule_dag_run(dr, session)
         session.flush()
 
@@ -2115,9 +2119,6 @@ class TestSchedulerJob(unittest.TestCase):
         )
 
         # Verify dag failure callback request is sent to file processor
-        scheduler.processor_agent = mock.Mock()
-        scheduler.processor_agent.send_callback_to_execute = mock.Mock()
-        scheduler._send_dag_callbacks_to_processor(dr)
         scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr._callback)
 
         session.rollback()
@@ -2158,6 +2159,10 @@ class TestSchedulerJob(unittest.TestCase):
         dr.start_date = timezone.utcnow() - datetime.timedelta(days=1)
         session.flush()
 
+        # Mock that processor_agent is started
+        scheduler.processor_agent = mock.Mock()
+        scheduler.processor_agent.send_callback_to_execute = mock.Mock()
+
         scheduler._schedule_dag_run(dr, session)
         session.flush()
 
@@ -2174,9 +2179,6 @@ class TestSchedulerJob(unittest.TestCase):
         )
 
         # Verify dag failure callback request is sent to file processor
-        scheduler.processor_agent = mock.Mock()
-        scheduler.processor_agent.send_callback_to_execute = mock.Mock()
-        scheduler._send_dag_callbacks_to_processor(dr)
         scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr._callback)
 
         session.rollback()

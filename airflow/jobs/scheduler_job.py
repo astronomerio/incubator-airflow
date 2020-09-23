@@ -1387,9 +1387,6 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             for dag_run in DagRun.next_dagruns_to_examine(session):
                 self._schedule_dag_run(dag_run, session)
 
-                # Send SLA & DAG Success/Failure Callbacks to be executed
-                self._send_dag_callbacks_to_processor(dag_run)
-
             expected_commit = True
             session.commit()
 
@@ -1507,13 +1504,16 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             # Work out if we should allow creating a new DagRun now?
             self._update_dag_next_dagrun(session.query(DagModel).get(dag_run.dag_id), dag, session)
 
-            dag_run._callback = DagCallbackRequest(
+            dag_run._callback = DagCallbackRequest(  # pylint: disable=protected-access
                 full_filepath=dag.fileloc,
                 dag_id=dag.dag_id,
                 execution_date=dag_run.execution_date,
                 is_failure_callback=True,
                 msg='timed_out'
             )
+
+            # Send SLA & DAG Success/Failure Callbacks to be executed
+            self._send_dag_callbacks_to_processor(dag_run)
 
             return 0
 
