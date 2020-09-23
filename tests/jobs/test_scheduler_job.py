@@ -952,7 +952,7 @@ class TestSchedulerJob(unittest.TestCase):
         """
         scheduler = SchedulerJob(
             executor=self.null_exec,
-            num_runs=1,
+            num_times_parse_dags=1,
             subdir=os.path.join(dags_folder))
         scheduler.heartrate = 0
         scheduler.run()
@@ -2463,15 +2463,18 @@ class TestSchedulerJob(unittest.TestCase):
         Test that the scheduler respects task start dates that are different from DAG start dates
         """
 
+        dagbag = DagBag(dag_folder=os.path.join(settings.DAGS_FOLDER, "no_dags.py"), include_examples=False)
         dag_id = 'test_task_start_date_scheduling'
         dag = self.dagbag.get_dag(dag_id)
-        dag.sync_to_db()
-        dag.clear()
+        dag.is_paused_upon_creation = False
+        dagbag.bag_dag(dag=dag, root_dag=dag)
 
-        # Deactivate other dags in this file
+        # Deactivate other dags in this file so the scheduler doesn't waste time processing them
         other_dag = self.dagbag.get_dag('test_start_date_scheduling')
         other_dag.is_paused_upon_creation = True
-        other_dag.sync_to_db()
+        dagbag.bag_dag(dag=other_dag, root_dag=other_dag)
+
+        dagbag.sync_to_db()
 
         scheduler = SchedulerJob(executor=self.null_exec,
                                  subdir=dag.fileloc,
@@ -2884,6 +2887,12 @@ class TestSchedulerJob(unittest.TestCase):
                          "invalid syntax ({}, line 1)".format(TEMP_DAG_FILENAME))
 
     def test_add_unparseable_file_after_sched_start_creates_import_error(self):
+        """
+        Check that new DAG files are picked up, and import errors recorded.
+
+        This is more of an "integration" test as it checks SchedulerJob, DagFileProcessorManager and
+        DagFileProcessor
+        """
         dags_folder = mkdtemp()
         try:
             unparseable_filename = os.path.join(dags_folder, TEMP_DAG_FILENAME)
