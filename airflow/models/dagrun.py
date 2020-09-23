@@ -354,16 +354,16 @@ class DagRun(Base, LoggingMixin):
         ).first()
 
     @provide_session
-    def update_state(self, session: Session = None, handle_callback: bool = True) -> List[TI]:
+    def update_state(self, session: Session = None, execute_callbacks: bool = True) -> List[TI]:
         """
         Determines the overall state of the DagRun based on the state
         of its TaskInstances.
 
         :param session: Sqlalchemy ORM Session
         :type session: Session
-        :param handle_callback: Should dag callbacks (success/failure, SLA etc) be invoked
+        :param execute_callbacks: Should dag callbacks (success/failure, SLA etc) be invoked
             directly (default: true) or recorded as a pending request in the ``callback`` property
-        :type handle_callback: bool
+        :type execute_callbacks: bool
         :return: ready_tis: the tis that can be scheduled in the current loop
         :rtype ready_tis: list[airflow.models.TaskInstance]
         """
@@ -406,7 +406,7 @@ class DagRun(Base, LoggingMixin):
         ):
             self.log.error('Marking run %s failed', self)
             self.set_state(State.FAILED)
-            if handle_callback:
+            if execute_callbacks:
                 dag.handle_callback(self, success=False, reason='task_failure', session=session)
             else:
                 self.callback = callback_requests.DagCallbackRequest(
@@ -423,7 +423,7 @@ class DagRun(Base, LoggingMixin):
         ):
             self.log.info('Marking run %s successful', self)
             self.set_state(State.SUCCESS)
-            if handle_callback:
+            if execute_callbacks:
                 dag.handle_callback(self, success=True, reason='success', session=session)
             else:
                 self.callback = callback_requests.DagCallbackRequest(
@@ -439,7 +439,7 @@ class DagRun(Base, LoggingMixin):
               none_task_concurrency and not are_runnable_tasks):
             self.log.error('Deadlock; marking run %s failed', self)
             self.set_state(State.FAILED)
-            if handle_callback:
+            if execute_callbacks:
                 dag.handle_callback(self, success=False, reason='all_tasks_deadlocked', session=session)
             else:
                 self.callback = callback_requests.DagCallbackRequest(

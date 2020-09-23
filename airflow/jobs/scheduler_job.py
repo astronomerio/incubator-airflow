@@ -551,7 +551,7 @@ class DagFileProcessor(LoggingMixin):
         :param session: DB session.
         """
         for request in callback_requests:
-            if isinstance(request, TaskCallbackRequest) and request.is_failure_callback:
+            if isinstance(request, TaskCallbackRequest):
                 self._execute_task_callbacks(dagbag, request)
             elif isinstance(request, SlaCallbackRequest):
                 self.manage_slas(dagbag.dags.get(request.dag_id))
@@ -584,8 +584,9 @@ class DagFileProcessor(LoggingMixin):
                 ti.try_number = simple_ti.try_number
                 ti.state = simple_ti.state
                 ti.test_mode = self.UNIT_TEST_MODE
-                ti.handle_failure(request.msg, ti.test_mode, ti.get_template_context())
-                self.log.info('Executed failure callback for %s in state %s', ti, ti.state)
+                if request.is_failure_callback:
+                    ti.handle_failure(request.msg, ti.test_mode, ti.get_template_context())
+                    self.log.info('Executed failure callback for %s in state %s', ti, ti.state)
 
     @provide_session
     def process_file(
@@ -1545,7 +1546,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         # TODO[HA]: Run verify_integrity, but only if the serialized_dag has changed
 
         # TODO[HA]: Rename update_state -> schedule_dag_run, ?? something else?
-        schedulable_tis = dag_run.update_state(session=session, handle_callback=False)
+        schedulable_tis = dag_run.update_state(session=session, execute_callbacks=False)
         # TODO[HA]: Don't return, update these from in update_state?
         count = session.query(TI).filter(
             TI.dag_id == dag_run.dag_id,
@@ -1565,8 +1566,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             self.processor_agent.send_callback_to_execute(dag_run.callback)
 
     def _manage_slas(self, dag: DAG):
-        check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
-        if not check_slas:
+        if not settings.CHECK_SLAS:
             return
 
         if not any(isinstance(ti.sla, timedelta) for ti in dag.tasks):

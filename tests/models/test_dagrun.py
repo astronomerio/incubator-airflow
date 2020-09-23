@@ -394,7 +394,7 @@ class TestDagRun(unittest.TestCase):
         dag_run = self.create_dag_run(dag=dag, state=State.RUNNING, task_states=initial_task_states)
         self.assertIsNone(dag_run.callback)
 
-        dag_run.update_state(handle_callback=False)
+        dag_run.update_state(execute_callbacks=False)
         self.assertEqual(State.SUCCESS, dag_run.state)
         # Callbacks are not added until handle_callback = False is passed to dag_run.update_state()
 
@@ -434,7 +434,7 @@ class TestDagRun(unittest.TestCase):
         dag_run = self.create_dag_run(dag=dag, state=State.RUNNING, task_states=initial_task_states)
         self.assertIsNone(dag_run.callback)
 
-        dag_run.update_state(handle_callback=False)
+        dag_run.update_state(execute_callbacks=False)
         self.assertEqual(State.FAILED, dag_run.state)
         # Callbacks are not added until handle_callback = False is passed to dag_run.update_state()
 
