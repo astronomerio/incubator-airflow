@@ -216,6 +216,7 @@ class TestDagFileProcessorManager(unittest.TestCase):
             self.assertEqual(1, len(requests))
             self.assertEqual(requests[0].full_filepath, dag.full_filepath)
             self.assertEqual(requests[0].msg, "Detected as zombie")
+            self.assertEqual(requests[0].is_failure_callback, True)
             self.assertIsInstance(requests[0].simple_task_instance, SimpleTaskInstance)
             self.assertEqual(ti.dag_id, requests[0].simple_task_instance.dag_id)
             self.assertEqual(ti.task_id, requests[0].simple_task_instance.task_id)
