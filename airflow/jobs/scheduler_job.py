@@ -554,9 +554,7 @@ class DagFileProcessor(LoggingMixin):
             if isinstance(request, TaskCallbackRequest) and request.is_failure_callback:
                 self._execute_task_callbacks(dagbag, request)
             elif isinstance(request, SlaCallbackRequest):
-                check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
-                if check_slas:
-                    self.manage_slas(dagbag.dags.get(request.dag_id))
+                self.manage_slas(dagbag.dags.get(request.dag_id))
             elif isinstance(request, DagCallbackRequest):
                 self._execute_dag_callbacks(dagbag, request, session)
 
@@ -1197,7 +1195,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
                 request = TaskCallbackRequest(
                     full_filepath=ti.dag_model.fileloc,
                     simple_task_instance=SimpleTaskInstance(ti),
-                    msg=msg % (ti, state, ti.state, info)
+                    msg=msg % (ti, state, ti.state, info),
                 )
 
                 self.processor_agent.send_callback_to_execute(request)
@@ -1567,8 +1565,12 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             self.processor_agent.send_callback_to_execute(dag_run.callback)
 
     def _manage_slas(self, dag: DAG):
+        check_slas: bool = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
+        if not check_slas:
+            return
+
         if not any(isinstance(ti.sla, timedelta) for ti in dag.tasks):
-            self.log.info("Skipping SLA check for %s because no tasks in DAG have SLAs", dag)
+            self.log.debug("Skipping SLA check for %s because no tasks in DAG have SLAs", dag)
             return
 
         if not self.processor_agent:

@@ -354,14 +354,15 @@ class DagRun(Base, LoggingMixin):
         ).first()
 
     @provide_session
-    def update_state(self, session: Session = None, handle_callback: Optional[bool] = True) -> List[TI]:
+    def update_state(self, session: Session = None, handle_callback: bool = True) -> List[TI]:
         """
         Determines the overall state of the DagRun based on the state
         of its TaskInstances.
 
         :param session: Sqlalchemy ORM Session
         :type session: Session
-        :param handle_callback: To run Dag Callbacks or not
+        :param handle_callback: Should dag callbacks (success/failure, SLA etc) be invoked
+            directly (default: true) or recorded as a pending request in the ``callback`` property
         :type handle_callback: bool
         :return: ready_tis: the tis that can be scheduled in the current loop
         :rtype ready_tis: list[airflow.models.TaskInstance]

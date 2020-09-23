@@ -65,7 +65,7 @@ class TaskCallbackRequest(CallbackRequest):
 
 class DagCallbackRequest(CallbackRequest):
     """
-    A Class with information about the is_failure_callback/failure DAG callback to be executed.
+    A Class with information about the success/failure DAG callback to be executed.
 
     :param full_filepath: File Path to use to run the callback
     :param dag_id: DAG ID
