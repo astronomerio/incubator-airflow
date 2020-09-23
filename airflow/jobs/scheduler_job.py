@@ -1504,7 +1504,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             # Work out if we should allow creating a new DagRun now?
             self._update_dag_next_dagrun(session.query(DagModel).get(dag_run.dag_id), dag, session)
 
-            dag_run._callback = DagCallbackRequest(  # pylint: disable=protected-access
+            dag_run.callback = DagCallbackRequest(
                 full_filepath=dag.fileloc,
                 dag_id=dag.dag_id,
                 execution_date=dag_run.execution_date,

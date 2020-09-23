@@ -101,12 +101,12 @@ class DagRun(Base, LoggingMixin):
         self.conf = conf or {}
         self.state = state
         self.run_type = run_type
-        self._callback: Optional[callback_requests.DagCallbackRequest] = None
+        self.callback: Optional[callback_requests.DagCallbackRequest] = None
         super().__init__()
 
     @orm.reconstructor
     def init_on_load(self):
-        self._callback: Optional[callback_requests.DagCallbackRequest] = None
+        self.callback: Optional[callback_requests.DagCallbackRequest] = None
 
     def __repr__(self):
         return (
@@ -409,7 +409,7 @@ class DagRun(Base, LoggingMixin):
             if handle_callback:
                 dag.handle_callback(self, success=False, reason='task_failure', session=session)
             else:
-                self._callback = callback_requests.DagCallbackRequest(
+                self.callback = callback_requests.DagCallbackRequest(
                     full_filepath=dag.fileloc,
                     dag_id=self.dag_id,
                     execution_date=self.execution_date,
@@ -426,7 +426,7 @@ class DagRun(Base, LoggingMixin):
             if handle_callback:
                 dag.handle_callback(self, success=True, reason='success', session=session)
             else:
-                self._callback = callback_requests.DagCallbackRequest(
+                self.callback = callback_requests.DagCallbackRequest(
                     full_filepath=dag.fileloc,
                     dag_id=self.dag_id,
                     execution_date=self.execution_date,
@@ -442,7 +442,7 @@ class DagRun(Base, LoggingMixin):
             if handle_callback:
                 dag.handle_callback(self, success=False, reason='all_tasks_deadlocked', session=session)
             else:
-                self._callback = callback_requests.DagCallbackRequest(
+                self.callback = callback_requests.DagCallbackRequest(
                     full_filepath=dag.fileloc,
                     dag_id=self.dag_id,
                     execution_date=self.execution_date,
@@ -628,7 +628,3 @@ class DagRun(Base, LoggingMixin):
             .all()
         )
         return dagruns
-
-    @property
-    def callback(self) -> Optional[callback_requests.DagCallbackRequest]:
-        return self._callback

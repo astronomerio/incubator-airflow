@@ -2119,7 +2119,7 @@ class TestSchedulerJob(unittest.TestCase):
         )
 
         # Verify dag failure callback request is sent to file processor
-        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr._callback)
+        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr.callback)
 
         session.rollback()
         session.close()
@@ -2179,7 +2179,7 @@ class TestSchedulerJob(unittest.TestCase):
         )
 
         # Verify dag failure callback request is sent to file processor
-        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr._callback)
+        scheduler.processor_agent.send_callback_to_execute.assert_called_once_with(dr.callback)
 
         session.rollback()
         session.close()
