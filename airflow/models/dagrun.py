@@ -63,7 +63,7 @@ class DagRun(Base, LoggingMixin):
     conf = Column(PickleType)
     # When a scheduler last attempted to schedule TIs for this DagRun
     last_scheduling_decision = Column(UtcDateTime)
-    dag_version = Column(String(32))
+    dag_hash = Column(String(32))
 
     dag = None
 
@@ -103,7 +103,7 @@ class DagRun(Base, LoggingMixin):
         self.conf = conf or {}
         self.state = state
         self.run_type = run_type
-        self.dag_version = dag_version
+        self.dag_hash = dag_version
         self.callback: Optional[callback_requests.DagCallbackRequest] = None
         super().__init__()
 

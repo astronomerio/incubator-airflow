@@ -1574,15 +1574,14 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
     def _verify_integrity_if_dag_changed(self, dag_run: DagRun, session=None):
         """Only run DagRun.verify integrity if Serialized DAG has changed since it is slow"""
         latest_version = SerializedDagModel.get_latest_version_hash(dag_run.dag_id, session=session)
-        if dag_run.dag_version == latest_version:
-            self.log.debug("DAG Version not changed, skipping dagrun.verify_integrity")
+        if dag_run.dag_hash == latest_version:
+            self.log.debug("DAG %s not changed structure, skipping dagrun.verify_integrity", dag_run.dag_id)
             return
 
-        dag_run.dag_version = latest_version
+        dag_run.dag_hash = latest_version
 
         # Refresh the DAG
         dag_run.dag = self.dagbag.get_dag(dag_id=dag_run.dag_id)
-        session.merge(dag_run)
 
         # Verify integrity also takes care of session.flush
         dag_run.verify_integrity(session=session)

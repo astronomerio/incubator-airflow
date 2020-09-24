@@ -2749,7 +2749,7 @@ class TestSchedulerJob(unittest.TestCase):
         assert tis_count == 1
 
         latest_dag_version = SerializedDagModel.get_latest_version_hash(dr.dag_id, session=session)
-        assert dr.dag_version == latest_dag_version
+        assert dr.dag_hash == latest_dag_version
 
         session.rollback()
         session.close()
@@ -2777,7 +2777,7 @@ class TestSchedulerJob(unittest.TestCase):
         dr = drs[0]
 
         dag_version_1 = SerializedDagModel.get_latest_version_hash(dr.dag_id, session=session)
-        assert dr.dag_version == dag_version_1
+        assert dr.dag_hash == dag_version_1
         assert scheduler.dagbag.dags == {'test_verify_integrity_if_dag_changed': dag}
         assert len(scheduler.dagbag.dags.get("test_verify_integrity_if_dag_changed").tasks) == 1
 
@@ -2796,7 +2796,7 @@ class TestSchedulerJob(unittest.TestCase):
         drs = DagRun.find(dag_id=dag.dag_id, session=session)
         assert len(drs) == 1
         dr = drs[0]
-        assert dr.dag_version == dag_version_2
+        assert dr.dag_hash == dag_version_2
         assert scheduler.dagbag.dags == {'test_verify_integrity_if_dag_changed': dag}
         assert len(scheduler.dagbag.dags.get("test_verify_integrity_if_dag_changed").tasks) == 2
 
@@ -2808,7 +2808,7 @@ class TestSchedulerJob(unittest.TestCase):
         assert tis_count == 2
 
         latest_dag_version = SerializedDagModel.get_latest_version_hash(dr.dag_id, session=session)
-        assert dr.dag_version == latest_dag_version
+        assert dr.dag_hash == latest_dag_version
 
         session.rollback()
         session.close()
