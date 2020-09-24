@@ -93,7 +93,7 @@ class DagRun(Base, LoggingMixin):
         conf: Optional[Any] = None,
         state: Optional[str] = None,
         run_type: Optional[str] = None,
-        dag_version: Optional[str] = None,
+        dag_hash: Optional[str] = None,
     ):
         self.dag_id = dag_id
         self.run_id = run_id
@@ -103,7 +103,7 @@ class DagRun(Base, LoggingMixin):
         self.conf = conf or {}
         self.state = state
         self.run_type = run_type
-        self.dag_hash = dag_version
+        self.dag_hash = dag_hash
         self.callback: Optional[callback_requests.DagCallbackRequest] = None
         super().__init__()
 

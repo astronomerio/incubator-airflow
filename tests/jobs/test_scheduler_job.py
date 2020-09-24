@@ -911,6 +911,7 @@ class TestSchedulerJob(unittest.TestCase):
         clear_db_dags()
         clear_db_sla_miss()
         clear_db_errors()
+        clear_db_serialized_dags()
 
         # Speed up some tests by not running the tasks, just look at what we
         # enqueue!
@@ -2723,9 +2724,8 @@ class TestSchedulerJob(unittest.TestCase):
         orm_dag = session.query(DagModel).get(dag.dag_id)
         assert orm_dag is not None
 
-        dag = SerializedDAG.from_dict(SerializedDAG.to_dict(dag))
-
         scheduler = SchedulerJob()
+        dag = scheduler.dagbag.get_dag('test_verify_integrity_if_dag_not_changed', session=session)
         scheduler._create_dag_run(orm_dag, dag, session)
 
         drs = DagRun.find(dag_id=dag.dag_id, session=session)
@@ -2766,11 +2766,9 @@ class TestSchedulerJob(unittest.TestCase):
         orm_dag = session.query(DagModel).get(dag.dag_id)
         assert orm_dag is not None
 
-        dag = SerializedDAG.from_dict(SerializedDAG.to_dict(dag))
-
         scheduler = SchedulerJob()
+        dag = scheduler.dagbag.get_dag('test_verify_integrity_if_dag_changed', session=session)
         scheduler._create_dag_run(orm_dag, dag, session)
-        scheduler.dagbag.bag_dag(dag, root_dag=dag)
 
         drs = DagRun.find(dag_id=dag.dag_id, session=session)
         assert len(drs) == 1

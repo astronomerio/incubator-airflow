@@ -1606,15 +1606,18 @@ class DAG(BaseDag, LoggingMixin):
         args.func(args, self)
 
     @provide_session
-    def create_dagrun(self,
-                      state,
-                      execution_date=None,
-                      run_id=None,
-                      start_date=None,
-                      external_trigger=False,
-                      conf=None,
-                      run_type=None,
-                      session=None):
+    def create_dagrun(
+        self,
+        state,
+        execution_date=None,
+        run_id=None,
+        start_date=None,
+        external_trigger=False,
+        conf=None,
+        run_type=None,
+        session=None,
+        dag_hash=None
+    ):
         """
         Creates a dag run from this dag including the tasks associated with this dag.
         Returns the dag run.
@@ -1635,8 +1638,9 @@ class DAG(BaseDag, LoggingMixin):
         :type conf: dict
         :param session: database session
         :type session: sqlalchemy.orm.session.Session
+        :param dag_hash: Hash of Serialized DAG
+        :type dag_hash: str
         """
-        from airflow.models.serialized_dag import SerializedDagModel
         if run_id and not run_type:
             if not isinstance(run_id, str):
                 raise ValueError(f"`run_id` expected to be a str is {type(run_id)}")
@@ -1659,7 +1663,7 @@ class DAG(BaseDag, LoggingMixin):
             conf=conf,
             state=state,
             run_type=run_type.value,
-            dag_version=SerializedDagModel.get_latest_version_hash(self.dag_id, session=session)
+            dag_hash=dag_hash
         )
         session.add(run)
 

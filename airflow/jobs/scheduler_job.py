@@ -1458,13 +1458,16 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         Unconditionally create a DAG run for the given DAG, and update the dag_model's fields to control
         if/when the next DAGRun should be created
         """
+        dag_hash = self.dagbag.dags_hash.get(dag.dag_id, None)
+
         dag.create_dagrun(
             run_type=DagRunType.SCHEDULED,
             execution_date=dag_model.next_dagrun,
             start_date=timezone.utcnow(),
             state=State.RUNNING,
             external_trigger=False,
-            session=session
+            session=session,
+            dag_hash=dag_hash
         )
 
         self._update_dag_next_dagrun(dag_model, dag, session)
