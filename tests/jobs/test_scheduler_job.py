@@ -522,44 +522,42 @@ class TestDagFileProcessor(unittest.TestCase):
             assert tis[0].state == State.SCHEDULED
             assert tis[1].state == State.SCHEDULED
 
-    @pytest.mark.xfail(run=False, reason="TODO[HA]")
-    def test_dag_file_processor_add_new_task(self):
+    def test_scheduler_job_add_new_task(self):
         """
         Test if a task instance will be added if the dag is updated
         """
-        dag = DAG(
-            dag_id='test_scheduler_add_new_task',
-            start_date=DEFAULT_DATE)
+        dag = DAG(dag_id='test_scheduler_add_new_task', start_date=DEFAULT_DATE)
+        DummyOperator(task_id='dummy', dag=dag, owner='airflow')
 
-        DummyOperator(
-            task_id='dummy',
-            dag=dag,
-            owner='airflow')
+        scheduler = SchedulerJob()
+        scheduler.dagbag.bag_dag(dag, root_dag=dag)
+        scheduler.dagbag.sync_to_db()
 
         session = settings.Session()
-        orm_dag = DagModel(dag_id=dag.dag_id)
-        session.merge(orm_dag)
-        session.commit()
-        session.close()
+        orm_dag = session.query(DagModel).get(dag.dag_id)
+        assert orm_dag is not None
 
-        dag = SerializedDAG.from_dict(SerializedDAG.to_dict(dag))
+        scheduler = SchedulerJob()
+        dag = scheduler.dagbag.get_dag('test_scheduler_add_new_task', session=session)
+        scheduler._create_dag_run(orm_dag, dag, session)
 
-        dag_file_processor = DagFileProcessor(dag_ids=[], log=mock.MagicMock())
-        dag.clear()
-
-        dr = dag_file_processor.create_dag_run(dag)
-        self.assertIsNotNone(dr)
+        drs = DagRun.find(dag_id=dag.dag_id, session=session)
+        assert len(drs) == 1
+        dr = drs[0]
 
         tis = dr.get_task_instances()
         self.assertEqual(len(tis), 1)
 
-        DummyOperator(
-            task_id='dummy2',
-            dag=dag,
-            owner='airflow')
-        dag = SerializedDAG.from_dict(SerializedDAG.to_dict(dag))
+        DummyOperator(task_id='dummy2', dag=dag, owner='airflow')
+        SerializedDagModel.write_dag(dag=dag)
 
-        dag_file_processor._process_task_instances(dag, dag_runs=[dr])
+        scheduled_tis = scheduler._schedule_dag_run(dr, session)
+        session.flush()
+        assert scheduled_tis == 2
+
+        drs = DagRun.find(dag_id=dag.dag_id, session=session)
+        assert len(drs) == 1
+        dr = drs[0]
 
         tis = dr.get_task_instances()
         self.assertEqual(len(tis), 2)
