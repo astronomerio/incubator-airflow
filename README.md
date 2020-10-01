@@ -16,7 +16,7 @@
  specific language governing permissions and limitations
  under the License.
 -->
-# Apache Airflow
+# Apache Airflow 
 
 [![PyPI version](https://badge.fury.io/py/apache-airflow.svg)](https://badge.fury.io/py/apache-airflow)
 [![GitHub Build](https://github.com/apache/airflow/workflows/CI%20Build/badge.svg)](https://github.com/apache/airflow/actions)
@@ -130,7 +130,7 @@ and our official source code releases:
 Following the ASF rules, the source packages released must be sufficient for a user to build and test the
 release provided they have access to the appropriate platform and tools.
 
-## Convenience packages
+## Convenience packages required
 
 There are other ways of installing and using Airflow. Those are "convenience" methods - they are
 not "official releases" as stated by the `ASF Release Policy`, but they can be used by the users
