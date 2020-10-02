@@ -18,6 +18,7 @@
 import logging
 import socket
 
+import pkg_resources
 import pendulum
 
 try:
@@ -63,8 +64,8 @@ def init_jinja_globals(app):
     git_version = get_airflow_git_version()
 
     try:
-        ac_version = importlib_metadata.version('astronomer-certified')
-    except importlib_metadata.PackageNotFoundError:
+        ac_version = pkg_resources.get_distribution('astronomer-certified').version
+    except pkg_resources.DistributionNotFound:
         # Try to work out ac_version from airflow version
         if airflow_version:
             ac_version = airflow_version.replace('+astro.', '-')

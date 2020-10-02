@@ -37,8 +37,6 @@ def init_appbuilder_links(app):
     appbuilder.add_link(
         name="Documentation", label="REST API Reference (Redoc)", href="RedocView.redoc", category='Docs'
     )
-    appbuilder.add_link("REST API Reference (Redoc)", href="RedocView.redoc", category='Docs')
-
     appbuilder.add_link(
         name="Astronomer",
         label="Astronomer Docs",

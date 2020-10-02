@@ -57,7 +57,7 @@ const config = {
     trigger: `${JS_DIR}/trigger.js`,
     variableEdit: `${JS_DIR}/variable_edit.js`,
     switch: `${CSS_DIR}/switch.css`,
-    taskInstances: `${JS_DIR}/task-instances.js`,
+    taskInstances: `${JS_DIR}/task_instances.js`,
     tree: `${CSS_DIR}/tree.css`,
     astroTheme: `${CSS_DIR}/astro-theme.css`,
   },
