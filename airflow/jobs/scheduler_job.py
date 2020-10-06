@@ -681,18 +681,21 @@ class DagFileProcessor(LoggingMixin):
         # Save individual DAGs in the ORM
         dagbag.read_dags_from_db = True
 
+        # Retry 'dagbag.sync_to_db()' in case of any Operational Errors
+        # In case of failures, provide_session handles rollback
+        max_retry_attempts = 3
         for attempt in tenacity.Retrying(
             retry=tenacity.retry_if_exception_type(exception_types=OperationalError),
             wait=tenacity.wait_random_exponential(multiplier=0.5, max=5),
-            stop=tenacity.stop_after_attempt(3),
+            stop=tenacity.stop_after_attempt(max_retry_attempts),
             before_sleep=tenacity.before_sleep_log(self.log, logging.DEBUG),
             reraise=True
         ):
             with attempt:
                 self.log.debug(
                     "Running dagbag.sync_to_db with retries. Try %d of %d",
-                    attempt.retry_state,
-                    attempt.retry_state.max_attempt_number
+                    attempt.retry_state.attempt_number,
+                    max_retry_attempts
                 )
                 dagbag.sync_to_db()
 
