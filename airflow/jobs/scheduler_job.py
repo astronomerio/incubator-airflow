@@ -32,6 +32,7 @@ from datetime import timedelta
 from multiprocessing.connection import Connection as MultiprocessingConnection
 from typing import Any, DefaultDict, Dict, Iterable, List, Optional, Set, Tuple
 
+import tenacity
 from setproctitle import setproctitle
 from sqlalchemy import and_, func, not_, or_
 from sqlalchemy.exc import OperationalError
@@ -679,7 +680,20 @@ class DagFileProcessor(LoggingMixin):
 
         # Save individual DAGs in the ORM
         dagbag.read_dags_from_db = True
-        dagbag.sync_to_db()
+
+        attempts = 3
+        attempt_num = 1
+        for attempt in tenacity.Retrying(
+            retry=tenacity.retry_if_exception_type(exception_types=OperationalError),
+            wait=tenacity.wait_random_exponential(multiplier=0.5, max=5),
+            stop=tenacity.stop_after_attempt(3),
+            before_sleep=tenacity.before_sleep_log(self.log, logging.INFO),
+        ):
+            with attempt:
+                self.log.info(
+                    "Running dagbag.sync_to_db with retries. Try %d of %d", attempt_num, attempts)
+                dagbag.sync_to_db()
+                attempt_num += 1
 
         if pickle_dags:
             paused_dag_ids = DagModel.get_paused_dag_ids(dag_ids=dagbag.dag_ids)
