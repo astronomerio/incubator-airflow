@@ -681,19 +681,20 @@ class DagFileProcessor(LoggingMixin):
         # Save individual DAGs in the ORM
         dagbag.read_dags_from_db = True
 
-        attempts = 3
-        attempt_num = 1
         for attempt in tenacity.Retrying(
             retry=tenacity.retry_if_exception_type(exception_types=OperationalError),
             wait=tenacity.wait_random_exponential(multiplier=0.5, max=5),
             stop=tenacity.stop_after_attempt(3),
-            before_sleep=tenacity.before_sleep_log(self.log, logging.INFO),
+            before_sleep=tenacity.before_sleep_log(self.log, logging.DEBUG),
+            reraise=True
         ):
             with attempt:
-                self.log.info(
-                    "Running dagbag.sync_to_db with retries. Try %d of %d", attempt_num, attempts)
+                self.log.debug(
+                    "Running dagbag.sync_to_db with retries. Try %d of %d",
+                    attempt.retry_state,
+                    attempt.retry_state.max_attempt_number
+                )
                 dagbag.sync_to_db()
-                attempt_num += 1
 
         if pickle_dags:
             paused_dag_ids = DagModel.get_paused_dag_ids(dag_ids=dagbag.dag_ids)
