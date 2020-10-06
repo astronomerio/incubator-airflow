@@ -705,10 +705,13 @@ class TestDagFileProcessor(unittest.TestCase):
 
     @mock.patch("airflow.jobs.scheduler_job.DagBag")
     def test_process_file_should_retry_sync_to_db(self, mock_dagbag):
+        """Test that dagbag.sync_to_db is retried on OperationalError"""
         dag_file_processor = DagFileProcessor(dag_ids=[], log=mock.MagicMock())
 
         mock_dagbag.return_value.dags = {'example_dag': mock.ANY}
         op_error = OperationalError(statement=mock.ANY, params=mock.ANY, orig=mock.ANY)
+
+        # Mock error for the first 2 tries and a successful third try
         side_effect = [op_error, op_error, mock.ANY]
 
         mock_sync_to_db = mock.Mock(side_effect=side_effect)
