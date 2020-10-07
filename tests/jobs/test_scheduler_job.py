@@ -2091,7 +2091,7 @@ class TestSchedulerJob(unittest.TestCase):
         Also test that SLA Callback Function is called.
         """
         dag = DAG(
-            dag_id='test_dagrun_success_callback',
+            dag_id='test_dagrun_callbacks_are_called',
             start_date=DEFAULT_DATE,
             on_success_callback=lambda x: print("success"),
             on_failure_callback=lambda x: print("failed")

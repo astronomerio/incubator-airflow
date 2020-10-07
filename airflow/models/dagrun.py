@@ -371,7 +371,6 @@ class DagRun(Base, LoggingMixin):
         :type execute_callbacks: bool
         :return: Tuple containing tis that can be scheduled in the current loop & `callback` that
             needs to be executed
-        :rtype ready_tis: list[airflow.models.TaskInstance]
         """
         # Callback to execute in case of Task Failures
         callback: Optional[callback_requests.DagCallbackRequest] = None
