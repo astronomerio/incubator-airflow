@@ -77,10 +77,8 @@ class DagBag(BaseDagBag, LoggingMixin):
     :param include_smart_sensor: whether to include the smart sensor native
         DAGs that create the smart sensor operators for whole cluster
     :type include_smart_sensor: bool
-    :param read_dags_from_db: Read DAGs from DB if store_serialized_dags is ``True``.
-        If ``False`` DAGs are read from python files. This property is not used when
-        determining whether or not to write Serialized DAGs, that is done by checking
-        the config ``store_serialized_dags``.
+    :param read_dags_from_db: Read DAGs from DB if ``True`` is passed.
+        If ``False`` DAGs are read from python files.
     :type read_dags_from_db: bool
     """
 
@@ -533,8 +531,6 @@ class DagBag(BaseDagBag, LoggingMixin):
         from airflow.models.serialized_dag import SerializedDagModel
         self.log.debug("Calling the DAG.bulk_sync_to_db method")
         DAG.bulk_sync_to_db(self.dags.values(), session=session)
-        # Write Serialized DAGs to DB if DAG Serialization is turned on
-        # Even though self.read_dags_from_db is False
-        if settings.STORE_SERIALIZED_DAGS or self.read_dags_from_db:
-            self.log.debug("Calling the SerializedDagModel.bulk_sync_to_db method")
-            SerializedDagModel.bulk_sync_to_db(self.dags.values(), session=session)
+        # Write Serialized DAGs to DB
+        self.log.debug("Calling the SerializedDagModel.bulk_sync_to_db method")
+        SerializedDagModel.bulk_sync_to_db(self.dags.values(), session=session)

@@ -135,7 +135,6 @@ class TestDagFileProcessor(unittest.TestCase):
         return dag
 
     @classmethod
-    @patch("airflow.models.dagbag.settings.STORE_SERIALIZED_DAGS", True)
     def setUpClass(cls):
         # Ensure the DAGs we are looking at from the DB are up-to-date
         non_serialized_dagbag = DagBag(read_dags_from_db=False, include_examples=False)
@@ -731,9 +730,8 @@ class TestDagFileProcessor(unittest.TestCase):
         )
 
         # Write DAGs to dag and serialized_dag table
-        with mock.patch("airflow.models.dagbag.settings.STORE_SERIALIZED_DAGS", return_value=True):
-            dagbag = DagBag(dag_folder=dag_file, include_examples=False)
-            dagbag.sync_to_db()
+        dagbag = DagBag(dag_folder=dag_file, include_examples=False)
+        dagbag.sync_to_db()
 
         scheduler_job = SchedulerJob()
         scheduler_job.processor_agent = mock.MagicMock()
@@ -813,7 +811,6 @@ class TestSchedulerJob(unittest.TestCase):
         self.null_exec = MockExecutor()
 
     @classmethod
-    @patch("airflow.models.dagbag.settings.STORE_SERIALIZED_DAGS", True)
     def setUpClass(cls):
         # Ensure the DAGs we are looking at from the DB are up-to-date
         non_serialized_dagbag = DagBag(read_dags_from_db=False, include_examples=False)
@@ -3562,8 +3559,7 @@ class TestSchedulerJobQueriesCount(unittest.TestCase):
         }), conf_vars({
             ('scheduler', 'use_job_schedule'): 'True',
             ('core', 'load_examples'): 'False',
-            ('core', 'store_serialized_dags'): 'True',
-        }), mock.patch.object(settings, 'STORE_SERIALIZED_DAGS', True):
+        }):
             dagruns = []
             dagbag = DagBag(dag_folder=ELASTIC_DAG_FILE, include_examples=False)
             dagbag.sync_to_db()
@@ -3684,8 +3680,7 @@ class TestSchedulerJobQueriesCount(unittest.TestCase):
             "PERF_SHAPE": shape,
         }), conf_vars({
             ('scheduler', 'use_job_schedule'): 'True',
-            ('core', 'store_serialized_dags'): 'True',
-        }), mock.patch.object(settings, 'STORE_SERIALIZED_DAGS', True):
+        }):
 
             dagbag = DagBag(dag_folder=ELASTIC_DAG_FILE, include_examples=False)
             dagbag.sync_to_db()
