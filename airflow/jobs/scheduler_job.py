@@ -55,7 +55,7 @@ from airflow.utils import asciiart, timezone
 from airflow.utils.callback_requests import (
     CallbackRequest, DagCallbackRequest, SlaCallbackRequest, TaskCallbackRequest,
 )
-from airflow.utils.dag_processing import AbstractDagFileProcessorProcess, DagFileProcessorAgent, SimpleDagBag
+from airflow.utils.dag_processing import AbstractDagFileProcessorProcess, DagFileProcessorAgent
 from airflow.utils.email import get_email_address_list, send_email
 from airflow.utils.log.logging_mixin import LoggingMixin, StreamLogWriter, set_context
 from airflow.utils.mixins import MultiprocessingStartMethodMixin
@@ -592,7 +592,11 @@ class DagFileProcessor(LoggingMixin):
                 elif isinstance(request, DagCallbackRequest):
                     self._execute_dag_callbacks(dagbag, request, session)
             except Exception:  # pylint: disable=broad-except
-                self.log.exception("Error executing callback for File: %s", request.full_filepath)
+                self.log.exception(
+                    "Error executing %s callback for file: %s",
+                    request.__class__.__name__,
+                    request.full_filepath
+                )
 
         session.commit()
 
@@ -823,13 +827,13 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
     @provide_session
     def _change_state_for_tis_without_dagrun(
         self,
-        simple_dag_bag: SimpleDagBag,
+        dag_ids: List[str],
         old_states: List[str],
         new_state: str,
         session: Session = None
     ) -> None:
         """
-        For all DAG IDs in the SimpleDagBag, look for task instances in the
+        For all DAG IDs, look for task instances in the
         old_states and set them to new_state if the corresponding DagRun
         does not exist or exists but is not in the running state. This
         normally should not happen, but it can if the state of DagRuns are
@@ -839,9 +843,9 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         :type old_states: list[airflow.utils.state.State]
         :param new_state: set TaskInstances to this state
         :type new_state: airflow.utils.state.State
-        :param simple_dag_bag: TaskInstances associated with DAGs in the
-            simple_dag_bag and with states in the old_states will be examined
-        :type simple_dag_bag: airflow.utils.dag_processing.SimpleDagBag
+        :param dag_ids: TaskInstances associated with these DAG IDs
+            with states in the old_states will be examined
+        :type dag_ids: list[str]
         """
         tis_changed = 0
         query = session \
@@ -849,7 +853,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             .outerjoin(models.DagRun, and_(
                 models.TaskInstance.dag_id == models.DagRun.dag_id,
                 models.TaskInstance.execution_date == models.DagRun.execution_date)) \
-            .filter(models.TaskInstance.dag_id.in_(simple_dag_bag.dag_ids)) \
+            .filter(models.TaskInstance.dag_id.in_(dag_ids)) \
             .filter(models.TaskInstance.state.in_(old_states)) \
             .filter(or_(
                 # pylint: disable=comparison-with-callable
@@ -872,7 +876,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
                     models.TaskInstance.execution_date ==
                     subq.c.execution_date) \
                 .update({models.TaskInstance.state: new_state}, synchronize_session=False)
-            session.commit()
+            session.flush()
 
         if tis_changed > 0:
             self.log.warning(
@@ -1483,10 +1487,23 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             session.expunge_all()
             # END: schedule TIs
 
-            # TODO[HA]: Do we need to call
-            # _change_state_for_tis_without_dagrun (2x) that we were before
-            # to tidy up manually tweaked TIs. Do we need to do it every
-            # time?
+            # TODO[HA]: Do we need to do it every time?
+            self._change_state_for_tis_without_dagrun(
+                dag_ids=self.dagbag.dag_ids,
+                old_states=[State.UP_FOR_RETRY],
+                new_state=State.FAILED,
+                session=session
+            )
+
+            self._change_state_for_tis_without_dagrun(
+                dag_ids=self.dagbag.dag_ids,
+                old_states=[State.QUEUED,
+                            State.SCHEDULED,
+                            State.UP_FOR_RESCHEDULE,
+                            State.SENSING],
+                new_state=State.NONE,
+                session=session
+            )
 
             try:
                 if self.executor.slots_available <= 0:

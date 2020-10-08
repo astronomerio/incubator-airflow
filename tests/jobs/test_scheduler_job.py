@@ -1718,7 +1718,6 @@ class TestSchedulerJob(unittest.TestCase):
             ti.refresh_from_db()
             self.assertEqual(State.QUEUED, ti.state)
 
-    @pytest.mark.quarantined
     def test_change_state_for_tis_without_dagrun(self):
         dag1 = DAG(dag_id='test_change_state_for_tis_without_dagrun', start_date=DEFAULT_DATE)
 
@@ -1770,7 +1769,7 @@ class TestSchedulerJob(unittest.TestCase):
         dagbag = self._make_simple_dag_bag([dag1, dag2, dag3])
         scheduler = SchedulerJob(num_runs=0)
         scheduler._change_state_for_tis_without_dagrun(
-            simple_dag_bag=dagbag,
+            dag_ids=list(dagbag.dag_ids),
             old_states=[State.SCHEDULED, State.QUEUED],
             new_state=State.NONE,
             session=session)
@@ -1798,7 +1797,7 @@ class TestSchedulerJob(unittest.TestCase):
         session.commit()
 
         scheduler._change_state_for_tis_without_dagrun(
-            simple_dag_bag=dagbag,
+            dag_ids=list(dagbag.dag_ids),
             old_states=[State.SCHEDULED, State.QUEUED],
             new_state=State.NONE,
             session=session)
@@ -1909,26 +1908,29 @@ class TestSchedulerJob(unittest.TestCase):
         [State.SCHEDULED, State.NONE],
         [State.UP_FOR_RESCHEDULE, State.NONE],
     ])
-    @pytest.mark.xfail(run=False, reason="TODO[HA]")
     def test_scheduler_loop_should_change_state_for_tis_without_dagrun(self,
                                                                        initial_task_state,
                                                                        expected_task_state):
         session = settings.Session()
-        dag = DAG(
-            'test_execute_helper_should_change_state_for_tis_without_dagrun',
-            start_date=DEFAULT_DATE,
-            default_args={'owner': 'owner1'})
+        dag_id = 'test_execute_helper_should_change_state_for_tis_without_dagrun'
+        dag = DAG(dag_id, start_date=DEFAULT_DATE, default_args={'owner': 'owner1'})
 
         with dag:
             op1 = DummyOperator(task_id='op1')
-        dag = SerializedDAG.from_dict(SerializedDAG.to_dict(dag))
 
+        # Write Dag to DB
+        with mock.patch.object(settings, "STORE_SERIALIZED_DAGS", True):
+            dagbag = DagBag(dag_folder="/dev/null", include_examples=False)
+            dagbag.bag_dag(dag, root_dag=dag)
+            dagbag.sync_to_db()
+
+        dag = DagBag(read_dags_from_db=True, include_examples=False).get_dag(dag_id)
         # Create DAG run with FAILED state
         dag.clear()
         dr = dag.create_dagrun(run_type=DagRunType.SCHEDULED,
                                state=State.FAILED,
-                               execution_date=DEFAULT_DATE,
-                               start_date=DEFAULT_DATE,
+                               execution_date=DEFAULT_DATE + timedelta(days=1),
+                               start_date=DEFAULT_DATE + timedelta(days=1),
                                session=session)
         ti = dr.get_task_instance(task_id=op1.task_id, session=session)
         ti.state = initial_task_state
