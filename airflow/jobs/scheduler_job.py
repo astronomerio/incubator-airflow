@@ -1482,22 +1482,39 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             # END: schedule TIs
 
             # TODO[HA]: Do we need to do it every time?
-            self._change_state_for_tis_without_dagrun(
-                old_states=[State.UP_FOR_RETRY],
-                new_state=State.FAILED,
-                session=session
-            )
+            try:
+                self._change_state_for_tis_without_dagrun(
+                    old_states=[State.UP_FOR_RETRY],
+                    new_state=State.FAILED,
+                    session=session
+                )
 
-            self._change_state_for_tis_without_dagrun(
-                old_states=[State.QUEUED,
-                            State.SCHEDULED,
-                            State.UP_FOR_RESCHEDULE,
-                            State.SENSING],
-                new_state=State.NONE,
-                session=session
-            )
+                self._change_state_for_tis_without_dagrun(
+                    old_states=[State.QUEUED,
+                                State.SCHEDULED,
+                                State.UP_FOR_RESCHEDULE,
+                                State.SENSING],
+                    new_state=State.NONE,
+                    session=session
+                )
 
-            guard.commit()
+                guard.commit()
+            except OperationalError as e:
+                # DB specific error codes:
+                # Postgres: 55P03
+                # MySQL: 3572, 'Statement aborted because lock(s) could not be acquired immediately and NOWAIT
+                #               is set.'
+                # MySQL: 1205, 'Lock wait timeout exceeded; try restarting transaction
+                #              (when NOWAIT isn't available)
+                db_err_code = getattr(e.orig, 'pgcode', None) or e.orig.args[0]
+
+                # We could test if e.orig is an instance of
+                # psycopg2.errors.LockNotAvailable/_mysql_exceptions.OperationalError, but that involves
+                # importing it. This doesn't
+                if db_err_code in ('55P03', 1205, 3572):
+                    self.log.debug("Lock held by another Scheduler")
+                else:
+                    raise
 
             try:
                 if self.executor.slots_available <= 0:
