@@ -1500,19 +1500,9 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
 
                 guard.commit()
             except OperationalError as e:
-                # DB specific error codes:
-                # Postgres: 55P03
-                # MySQL: 3572, 'Statement aborted because lock(s) could not be acquired immediately and NOWAIT
-                #               is set.'
-                # MySQL: 1205, 'Lock wait timeout exceeded; try restarting transaction
-                #              (when NOWAIT isn't available)
-                db_err_code = getattr(e.orig, 'pgcode', None) or e.orig.args[0]
-
-                # We could test if e.orig is an instance of
-                # psycopg2.errors.LockNotAvailable/_mysql_exceptions.OperationalError, but that involves
-                # importing it. This doesn't
-                if db_err_code in ('55P03', 1205, 3572):
+                if self._is_lock_not_available_error(error=e):
                     self.log.debug("Lock held by another Scheduler")
+                    session.rollback()
                 else:
                     raise
 
@@ -1534,18 +1524,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
             except OperationalError as e:
                 timer.stop(send=False)
 
-                # DB specific error codes:
-                # Postgres: 55P03
-                # MySQL: 3572, 'Statement aborted because lock(s) could not be acquired immediately and NOWAIT
-                #               is set.'
-                # MySQL: 1205, 'Lock wait timeout exceeded; try restarting transaction
-                #              (when NOWAIT isn't available)
-                db_err_code = getattr(e.orig, 'pgcode', None) or e.orig.args[0]
-
-                # We could test if e.orig is an instance of
-                # psycopg2.errors.LockNotAvailable/_mysql_exceptions.OperationalError, but that involves
-                # importing it. This doesn't
-                if db_err_code in ('55P03', 1205, 3572):
+                if self._is_lock_not_available_error(error=e):
                     self.log.debug("Critical section lock held by another Scheduler")
                     Stats.incr('scheduler.critical_section_busy')
                     session.rollback()
@@ -1553,6 +1532,24 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
                 raise
 
             return num_queued_tis
+
+    @staticmethod
+    def _is_lock_not_available_error(error: OperationalError):
+        """Check if the Error is about not being able to acquire lock"""
+        # DB specific error codes:
+        # Postgres: 55P03
+        # MySQL: 3572, 'Statement aborted because lock(s) could not be acquired immediately and NOWAIT
+        #               is set.'
+        # MySQL: 1205, 'Lock wait timeout exceeded; try restarting transaction
+        #              (when NOWAIT isn't available)
+        db_err_code = getattr(error.orig, 'pgcode', None) or error.orig.args[0]
+
+        # We could test if e.orig is an instance of
+        # psycopg2.errors.LockNotAvailable/_mysql_exceptions.OperationalError, but that involves
+        # importing it. This doesn't
+        if db_err_code in ('55P03', 1205, 3572):
+            return True
+        return False
 
     def _create_dag_runs(self, dag_models: Iterable[DagModel], session: Session) -> None:
         """
