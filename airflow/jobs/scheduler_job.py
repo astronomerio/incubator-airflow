@@ -1544,7 +1544,7 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         #              (when NOWAIT isn't available)
         db_err_code = getattr(error.orig, 'pgcode', None) or error.orig.args[0]
 
-        # We could test if e.orig is an instance of
+        # We could test if error.orig is an instance of
         # psycopg2.errors.LockNotAvailable/_mysql_exceptions.OperationalError, but that involves
         # importing it. This doesn't
         if db_err_code in ('55P03', 1205, 3572):
