@@ -827,13 +827,12 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
     @provide_session
     def _change_state_for_tis_without_dagrun(
         self,
-        dag_ids: List[str],
         old_states: List[str],
         new_state: str,
         session: Session = None
     ) -> None:
         """
-        For all DAG IDs, look for task instances in the
+        For all DAG IDs in the DagBag, look for task instances in the
         old_states and set them to new_state if the corresponding DagRun
         does not exist or exists but is not in the running state. This
         normally should not happen, but it can if the state of DagRuns are
@@ -843,17 +842,12 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
         :type old_states: list[airflow.utils.state.State]
         :param new_state: set TaskInstances to this state
         :type new_state: airflow.utils.state.State
-        :param dag_ids: TaskInstances associated with these DAG IDs
-            with states in the old_states will be examined
-        :type dag_ids: list[str]
         """
         tis_changed = 0
         query = session \
             .query(models.TaskInstance) \
-            .outerjoin(models.DagRun, and_(
-                models.TaskInstance.dag_id == models.DagRun.dag_id,
-                models.TaskInstance.execution_date == models.DagRun.execution_date)) \
-            .filter(models.TaskInstance.dag_id.in_(dag_ids)) \
+            .outerjoin(models.TaskInstance.dag_run) \
+            .filter(models.TaskInstance.dag_id.in_(list(self.dagbag.dag_ids))) \
             .filter(models.TaskInstance.state.in_(old_states)) \
             .filter(or_(
                 # pylint: disable=comparison-with-callable
@@ -1489,14 +1483,12 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
 
             # TODO[HA]: Do we need to do it every time?
             self._change_state_for_tis_without_dagrun(
-                dag_ids=self.dagbag.dag_ids,
                 old_states=[State.UP_FOR_RETRY],
                 new_state=State.FAILED,
                 session=session
             )
 
             self._change_state_for_tis_without_dagrun(
-                dag_ids=self.dagbag.dag_ids,
                 old_states=[State.QUEUED,
                             State.SCHEDULED,
                             State.UP_FOR_RESCHEDULE,
@@ -1504,6 +1496,8 @@ class SchedulerJob(BaseJob):  # pylint: disable=too-many-instance-attributes
                 new_state=State.NONE,
                 session=session
             )
+
+            guard.commit()
 
             try:
                 if self.executor.slots_available <= 0:

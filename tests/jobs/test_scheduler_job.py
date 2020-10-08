@@ -51,7 +51,6 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.serialization.serialized_objects import SerializedDAG
 from airflow.utils import timezone
 from airflow.utils.callback_requests import DagCallbackRequest, TaskCallbackRequest
-from airflow.utils.dag_processing import SimpleDagBag
 from airflow.utils.dates import days_ago
 from airflow.utils.file import list_py_file_paths
 from airflow.utils.session import create_session, provide_session
@@ -856,9 +855,6 @@ class TestSchedulerJob(unittest.TestCase):
         scheduler.heartrate = 0
         scheduler.run()
 
-    def _make_simple_dag_bag(self, dags):
-        return SimpleDagBag([SerializedDAG.from_dict(SerializedDAG.to_dict(dag)) for dag in dags])
-
     def test_no_orphan_process_will_be_left(self):
         empty_dir = mkdtemp()
         current_process = psutil.Process()
@@ -1497,7 +1493,6 @@ class TestSchedulerJob(unittest.TestCase):
         dag = DAG(dag_id=dag_id, start_date=DEFAULT_DATE, concurrency=2)
         task1 = DummyOperator(dag=dag, task_id=task_id_1)
         dag = SerializedDAG.from_dict(SerializedDAG.to_dict(dag))
-        self._make_simple_dag_bag([dag])
 
         scheduler = SchedulerJob()
         session = settings.Session()
@@ -1718,25 +1713,21 @@ class TestSchedulerJob(unittest.TestCase):
             ti.refresh_from_db()
             self.assertEqual(State.QUEUED, ti.state)
 
+    @pytest.mark.quarantined
     def test_change_state_for_tis_without_dagrun(self):
         dag1 = DAG(dag_id='test_change_state_for_tis_without_dagrun', start_date=DEFAULT_DATE)
 
         DummyOperator(task_id='dummy', dag=dag1, owner='airflow')
 
         DummyOperator(task_id='dummy_b', dag=dag1, owner='airflow')
-        dag1 = SerializedDAG.from_dict(SerializedDAG.to_dict(dag1))
 
         dag2 = DAG(dag_id='test_change_state_for_tis_without_dagrun_dont_change', start_date=DEFAULT_DATE)
 
         DummyOperator(task_id='dummy', dag=dag2, owner='airflow')
 
-        dag2 = SerializedDAG.from_dict(SerializedDAG.to_dict(dag2))
-
         dag3 = DAG(dag_id='test_change_state_for_tis_without_dagrun_no_dagrun', start_date=DEFAULT_DATE)
 
         DummyOperator(task_id='dummy', dag=dag3, owner='airflow')
-
-        dag3 = SerializedDAG.from_dict(SerializedDAG.to_dict(dag3))
 
         session = settings.Session()
         dr1 = dag1.create_dagrun(run_type=DagRunType.SCHEDULED,
@@ -1766,10 +1757,17 @@ class TestSchedulerJob(unittest.TestCase):
         session.merge(ti3)
         session.commit()
 
-        dagbag = self._make_simple_dag_bag([dag1, dag2, dag3])
+        with mock.patch.object(settings, "STORE_SERIALIZED_DAGS", True):
+            dagbag = DagBag("/dev/null", include_examples=False)
+            dagbag.bag_dag(dag1, root_dag=dag1)
+            dagbag.bag_dag(dag2, root_dag=dag2)
+            dagbag.bag_dag(dag3, root_dag=dag3)
+            dagbag.sync_to_db(session)
+
         scheduler = SchedulerJob(num_runs=0)
+        scheduler.dagbag.collect_dags_from_db()
+
         scheduler._change_state_for_tis_without_dagrun(
-            dag_ids=list(dagbag.dag_ids),
             old_states=[State.SCHEDULED, State.QUEUED],
             new_state=State.NONE,
             session=session)
@@ -1797,7 +1795,6 @@ class TestSchedulerJob(unittest.TestCase):
         session.commit()
 
         scheduler._change_state_for_tis_without_dagrun(
-            dag_ids=list(dagbag.dag_ids),
             old_states=[State.SCHEDULED, State.QUEUED],
             new_state=State.NONE,
             session=session)
