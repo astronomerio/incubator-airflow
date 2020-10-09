@@ -1,0 +1,7 @@
+378c378,381
+<             self.istio.handle_istio_proxy(task)
+---
+>             try:
+>                 self.istio.handle_istio_proxy(task)
+>             except Exception as e:
+>                 self.log.exception("Issue shutting down istio proxy for task %s. Continuing", task.metadata.name)

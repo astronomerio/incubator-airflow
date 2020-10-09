@@ -48,26 +48,24 @@ class TestPodLauncher(unittest.TestCase):
         ]
         logs = self.pod_launcher.read_pod_logs(mock.sentinel)
         self.assertEqual(mock.sentinel.logs, logs)
-        self.mock_kube_client.read_namespaced_pod_log.assert_has_calls(
-            [
-                mock.call(
-                    _preload_content=False,
-                    container="base",
-                    follow=True,
-                    name=mock.sentinel.metadata.name,
-                    namespace=mock.sentinel.metadata.namespace,
-                    tail_lines=10,
-                ),
-                mock.call(
-                    _preload_content=False,
-                    container="base",
-                    follow=True,
-                    name=mock.sentinel.metadata.name,
-                    namespace=mock.sentinel.metadata.namespace,
-                    tail_lines=10,
-                ),
-            ]
-        )
+        self.mock_kube_client.read_namespaced_pod_log.assert_has_calls([
+            mock.call(
+                _preload_content=False,
+                container='base',
+                follow=True,
+                timestamps=False,
+                name=mock.sentinel.metadata.name,
+                namespace=mock.sentinel.metadata.namespace
+            ),
+            mock.call(
+                _preload_content=False,
+                container='base',
+                follow=True,
+                timestamps=False,
+                name=mock.sentinel.metadata.name,
+                namespace=mock.sentinel.metadata.namespace
+            )
+        ])
 
     def test_read_pod_logs_retries_fails(self):
         mock.sentinel.metadata = mock.MagicMock()
@@ -82,21 +80,41 @@ class TestPodLauncher(unittest.TestCase):
 
     def test_read_pod_logs_successfully_with_tail_lines(self):
         mock.sentinel.metadata = mock.MagicMock()
-        self.mock_kube_client.read_namespaced_pod_log.side_effect = [mock.sentinel.logs]
-        logs = self.pod_launcher.read_pod_logs(mock.sentinel, 100)
+        self.mock_kube_client.read_namespaced_pod_log.side_effect = [
+            mock.sentinel.logs
+        ]
+        logs = self.pod_launcher.read_pod_logs(mock.sentinel, tail_lines=100)
         self.assertEqual(mock.sentinel.logs, logs)
-        self.mock_kube_client.read_namespaced_pod_log.assert_has_calls(
-            [
-                mock.call(
-                    _preload_content=False,
-                    container="base",
-                    follow=True,
-                    name=mock.sentinel.metadata.name,
-                    namespace=mock.sentinel.metadata.namespace,
-                    tail_lines=100,
-                ),
-            ]
-        )
+        self.mock_kube_client.read_namespaced_pod_log.assert_has_calls([
+            mock.call(
+                _preload_content=False,
+                container='base',
+                follow=True,
+                timestamps=False,
+                name=mock.sentinel.metadata.name,
+                namespace=mock.sentinel.metadata.namespace,
+                tail_lines=100
+            ),
+        ])
+
+    def test_read_pod_logs_successfully_with_since_seconds(self):
+        mock.sentinel.metadata = mock.MagicMock()
+        self.mock_kube_client.read_namespaced_pod_log.side_effect = [
+            mock.sentinel.logs
+        ]
+        logs = self.pod_launcher.read_pod_logs(mock.sentinel, since_seconds=2)
+        self.assertEqual(mock.sentinel.logs, logs)
+        self.mock_kube_client.read_namespaced_pod_log.assert_has_calls([
+            mock.call(
+                _preload_content=False,
+                container='base',
+                follow=True,
+                timestamps=False,
+                name=mock.sentinel.metadata.name,
+                namespace=mock.sentinel.metadata.namespace,
+                since_seconds=2
+            ),
+        ])
 
     def test_read_pod_events_successfully_returns_events(self):
         mock.sentinel.metadata = mock.MagicMock()
@@ -375,3 +393,15 @@ class TestPodLauncherHelper(unittest.TestCase):
             vol["configs"] = confs
             parsed_configs.append(vol)
         return parsed_configs
+
+    def test_parse_log_line(self):
+        timestamp, message = \
+            self.pod_launcher.parse_log_line('2020-10-08T14:16:17.793417674Z Valid message\n')
+
+        self.assertEqual(timestamp, '2020-10-08T14:16:17.793417674Z')
+        self.assertEqual(message, 'Valid message')
+
+        self.assertRaises(
+            Exception,
+            self.pod_launcher.parse_log_line('2020-10-08T14:16:17.793417674ZInvalid message\n'),
+        )

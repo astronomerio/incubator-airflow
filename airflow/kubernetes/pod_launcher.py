@@ -16,10 +16,12 @@
 # under the License.
 """Launches PODs"""
 import json
+import math
 import time
 import warnings
 from datetime import datetime as dt
 
+import pendulum
 import tenacity
 from kubernetes import watch, client
 from kubernetes.client.api_client import ApiClient
@@ -168,9 +170,23 @@ class PodLauncher(LoggingMixin):
         """
 
         if get_logs:
-            logs = self.read_pod_logs(pod)
-            for line in logs:
-                self.log.info(line)
+            read_logs_since_sec = None
+            last_log_time = None
+            while True:
+                logs = self.read_pod_logs(pod, timestamps=True, since_seconds=read_logs_since_sec)
+                for line in logs:
+                    timestamp, message = self.parse_log_line(line.decode('utf-8'))
+                    last_log_time = pendulum.parse(timestamp)
+                    self.log.info(message)
+                time.sleep(1)
+
+                if not self.base_container_is_running(pod):
+                    break
+
+                self.log.warning('Pod %s log read interrupted', pod.metadata.name)
+                delta = pendulum.now() - last_log_time
+                # Prefer logs duplication rather than loss
+                read_logs_since_sec = math.ceil(delta.total_seconds())
         result = None
         while self.base_container_is_running(pod):
             self.log.info('Container %s has state %s', pod.metadata.name, State.RUNNING)
@@ -186,6 +202,22 @@ class PodLauncher(LoggingMixin):
             if not istio_shut_down_initiated:
                 istio_shut_down_initiated = self.istio.handle_istio_proxy(self.read_pod(pod))
         return self._task_status(self.read_pod(pod)), result
+
+    def parse_log_line(self, line: str) -> Tuple[str, str]:
+        """
+        Parse K8s log line and returns the final state
+
+        :param line: k8s log line
+        :type line: str
+        :return: timestamp and log message
+        :rtype: Tuple[str, str]
+        """
+        split_at = line.find(' ')
+        if split_at == -1:
+            raise Exception('Log not in "{{timestamp}} {{log}}" format. Got: {}'.format(line))
+        timestamp = line[:split_at]
+        message = line[split_at + 1:].rstrip()
+        return timestamp, message
 
     def _task_status(self, event):
         self.log.info(
@@ -218,16 +250,28 @@ class PodLauncher(LoggingMixin):
         wait=tenacity.wait_exponential(),
         reraise=True
     )
-    def read_pod_logs(self, pod, tail_lines=10):
+    def read_pod_logs(self,
+                      pod,
+                      tail_lines=None,
+                      timestamps=False,
+                      since_seconds=None):
         """Reads log from the POD"""
+        additional_kwargs = {}
+        if since_seconds:
+            additional_kwargs['since_seconds'] = since_seconds
+
+        if tail_lines:
+            additional_kwargs['tail_lines'] = tail_lines
+
         try:
             return self._client.read_namespaced_pod_log(
                 name=pod.metadata.name,
                 namespace=pod.metadata.namespace,
                 container='base',
                 follow=True,
-                tail_lines=tail_lines,
-                _preload_content=False
+                timestamps=timestamps,
+                _preload_content=False,
+                **additional_kwargs
             )
         except BaseHTTPError as e:
             raise AirflowException(
