@@ -19,14 +19,6 @@
 . "$(dirname "${BASH_SOURCE[0]}")/../libraries/_script_init.sh"
 
 set -e
-target_remote="origin"
-if [ "${CI_TARGET_REPO}" != "${CI_SOURCE_REPO}" ]; then
-    target_remote="target"
-    git remote add target "https://github.com/${CI_TARGET_REPO}"
-    git fetch target "${CI_TARGET_BRANCH}" --depth=1
-fi
-
-echo "Diffing openapi spec against ${target_remote}/${CI_TARGET_BRANCH}..."
 
 SPEC_FILE="airflow/api_connexion/openapi/v1.yaml"
 readonly SPEC_FILE
@@ -36,12 +28,6 @@ readonly GO_CLIENT_PATH
 
 GO_TARGET_CLIENT_PATH="clients/go_target_branch/airflow"
 readonly GO_TARGET_CLIENT_PATH
-
-
-if ! git diff --name-only "${target_remote}/${CI_TARGET_BRANCH}" HEAD | grep "${SPEC_FILE}\|clients/gen"; then
-    echo "No openapi spec change detected, going to skip client code gen validation."
-    exit 0
-fi
 
 echo "OpenAPI spec change detected. comparing codegen diff..."
 
