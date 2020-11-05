@@ -27,6 +27,6 @@ def upgrade_helm():
     Upgrade Helm repo
     """
     subprocess.check_output(
-        ["helm", "repo", "add", "stable", "https://kubernetes-charts.storage.googleapis.com/"]
+        ["helm", "repo", "add", "stable", "https://charts.helm.sh/stable/"]
     )
     subprocess.check_output(["helm", "dep", "update", sys.path[0]])
