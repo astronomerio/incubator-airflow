@@ -1109,6 +1109,7 @@ class CliTests(unittest.TestCase):
             DAG('no_access_control')
         ], dagbag_mock)
         self.appbuilder.sm = mock.Mock()
+        self.appbuilder.add_permissions = mock.Mock()
 
         args = self.parser.parse_args([
             'sync_perm'

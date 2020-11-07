@@ -396,7 +396,7 @@ jobs:
       - uses: actions/checkout@master
       - uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '3.7'
       - run: |
           pip install --upgrade pip==19.0.2
           pip install packaging GitPython wheel
