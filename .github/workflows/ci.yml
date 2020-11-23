@@ -149,6 +149,7 @@ jobs:
       KUBERNETES_VERSION: "${{ matrix.kubernetes-version }}"
       KIND_VERSION: "${{ matrix.kind-version }}"
       HELM_VERSION: "${{ matrix.helm-version }}"
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: "true"
     if: needs.trigger-tests.outputs.run-tests == 'true' || github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v2

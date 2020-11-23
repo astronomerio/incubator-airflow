@@ -21,4 +21,4 @@ URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKF
 echo "Calling URL: ${URL}"
 WORKFLOW_ID=$(curl "Authorization: token ${GITHUB_TOKEN}" "${URL}" | jq '.id')
 echo "Workflow id for ${WORKFLOW}: ${WORKFLOW_ID}"
-echo "::set-env name=WORKFLOW_ID::${WORKFLOW_ID}"
+echo "WORKFLOW_ID=${WORKFLOW_ID}" >> "$GITHUB_ENV"
