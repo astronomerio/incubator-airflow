@@ -26,7 +26,6 @@ on:  # yamllint disable-line rule:truthy
     branches: ['master', 'v1-10-test', 'v1-10-stable', 'v2-0-test']
 
 env:
-
   MOUNT_LOCAL_SOURCES: "false"
   FORCE_ANSWER_TO_QUESTIONS: "yes"
   FORCE_PULL_IMAGES: "true"
@@ -63,7 +62,13 @@ jobs:
 
   build-info:
     name: "Build info"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+      ${{ (
+        github.event_name == 'push' ||
+        github.event_name == 'schedule' ||
+        github.event.pull_request.author_association == 'OWNER' ||
+        github.event.pull_request.author_association == 'MEMBER'
+      ) && 'self-hosted' || 'ubuntu-20.04' }}
     env:
       GITHUB_CONTEXT: ${{ toJson(github) }}
     outputs:
@@ -150,7 +155,12 @@ jobs:
 
   test-openapi-client-generation:
     name: "Test OpenAPI client generation"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+      ${{ (
+      github.event_name == 'push' ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER'
+      ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info]
     if: needs.build-info.outputs.needs-api-codegen == 'true'
     steps:
@@ -165,7 +175,12 @@ jobs:
   ci-images:
     timeout-minutes: 120
     name: "Wait for CI images"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+      ${{ (
+      github.event_name == 'push' ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER'
+      ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info]
     if: needs.build-info.outputs.image-build == 'true'
     env:
@@ -202,7 +217,12 @@ jobs:
   verify-ci-images:
     timeout-minutes: 20
     name: "Verify CI Image Py${{matrix.python-version}}"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+      ${{ (
+      github.event_name == 'push' ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER'
+      ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     strategy:
       matrix:
@@ -228,7 +248,12 @@ jobs:
   static-checks:
     timeout-minutes: 30
     name: "Static checks"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+      ${{ (
+      github.event_name == 'push' ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'MEMBER'
+      ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     env:
       SKIP: "pylint,identity"
@@ -265,7 +290,12 @@ jobs:
   static-checks-basic-checks-only:
     timeout-minutes: 30
     name: "Static checks: basic checks only"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info]
     env:
       SKIP: "build,mypy,flake8,pylint,bats-in-container-tests,identity"
@@ -304,7 +334,12 @@ jobs:
   static-checks-pylint:
     timeout-minutes: 30
     name: "Pylint"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     if: needs.build-info.outputs.basic-checks-only == 'false'
     env:
@@ -339,7 +374,12 @@ jobs:
   docs:
     timeout-minutes: 45
     name: "Build docs"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     if: needs.build-info.outputs.docs-build == 'true'
     steps:
@@ -377,7 +417,12 @@ jobs:
   prepare-backport-provider-packages:
     timeout-minutes: 30
     name: "Backport packages: ${{ matrix.package-format }}"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     strategy:
       matrix:
@@ -431,7 +476,12 @@ jobs:
   prepare-provider-packages:
     timeout-minutes: 30
     name: "Provider packages ${{ matrix.package-format }}"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     env:
       INSTALL_AIRFLOW_VERSION: "${{ matrix.package-format }}"
@@ -482,7 +532,12 @@ jobs:
   test-provider-packages-released-airflow:
     timeout-minutes: 30
     name: "Test Provider packages with 2.0.0 version ${{ matrix.package-format }}"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     env:
       INSTALL_AIRFLOW_VERSION: "2.0.0"
@@ -517,7 +572,12 @@ jobs:
   tests-helm:
     timeout-minutes: 20
     name: "Python unit tests for helm chart"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     env:
       MOUNT_LOCAL_SOURCES: "true"
@@ -570,7 +630,12 @@ jobs:
     name: >
       Postgres${{matrix.postgres-version}},Py${{matrix.python-version}}:
       ${{needs.build-info.outputs.testTypes}}
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     strategy:
       matrix:
@@ -627,7 +692,12 @@ jobs:
     timeout-minutes: 80
     name: >
       MySQL${{matrix.mysql-version}}, Py${{matrix.python-version}}: ${{needs.build-info.outputs.testTypes}}
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     strategy:
       matrix:
@@ -683,7 +753,12 @@ jobs:
     timeout-minutes: 80
     name: >
       Sqlite Py${{matrix.python-version}}: ${{needs.build-info.outputs.testTypes}}
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     strategy:
       matrix:
@@ -736,7 +811,12 @@ jobs:
   tests-quarantined:
     timeout-minutes: 60
     name: "Quarantined tests"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     continue-on-error: true
     needs: [build-info, ci-images]
     strategy:
@@ -814,7 +894,12 @@ jobs:
   upload-coverage:
     timeout-minutes: 5
     name: "Upload coverage"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     continue-on-error: true
     needs:
       - tests-kubernetes
@@ -842,7 +927,12 @@ jobs:
   prod-images:
     timeout-minutes: 120
     name: "Wait for PROD images"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, ci-images]
     env:
       BACKEND: sqlite
@@ -875,7 +965,12 @@ jobs:
   verify-prod-images:
     timeout-minutes: 20
     name: "Verify Prod Image Py${{matrix.python-version}}"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, prod-images]
     strategy:
       matrix:
@@ -900,7 +995,12 @@ jobs:
   tests-kubernetes:
     timeout-minutes: 50
     name: K8s ${{matrix.python-version}} ${{matrix.kubernetes-version}} ${{matrix.kubernetes-mode}}
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs: [build-info, prod-images]
     strategy:
       matrix:
@@ -974,7 +1074,12 @@ jobs:
   push-prod-images-to-github-registry:
     timeout-minutes: 10
     name: "Push PROD images as cache to GitHub Registry"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs:
       - build-info
       - static-checks
@@ -1023,7 +1128,12 @@ jobs:
   push-ci-images-to-github-registry:
     timeout-minutes: 10
     name: "Push CI images as cache to GitHub Registry"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs:
       - build-info
       - static-checks
@@ -1065,7 +1175,12 @@ jobs:
   constraints:
     timeout-minutes: 10
     name: "Constraints"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     strategy:
       matrix:
         python-version: ${{ fromJson(needs.build-info.outputs.pythonVersions) }}
@@ -1103,7 +1218,12 @@ jobs:
   constraints-push:
     timeout-minutes: 10
     name: "Constraints push"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+          ${{ (
+                  github.event_name == 'push' ||
+                          github.event.pull_request.author_association == 'OWNER' ||
+                                  github.event.pull_request.author_association == 'MEMBER'
+                                        ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs:
       - build-info
       - constraints
@@ -1149,7 +1269,12 @@ jobs:
   tag-repo-nightly:
     timeout-minutes: 10
     name: "Tag repo nightly"
-    runs-on: ubuntu-20.04
+    runs-on: >-
+      ${{ (
+        github.event_name == 'push' ||
+        github.event.pull_request.author_association == 'OWNER' ||
+        github.event.pull_request.author_association == 'MEMBER'
+      ) && 'self-hosted' || 'ubuntu-20.04' }}
     needs:
       - docs
       - static-checks
