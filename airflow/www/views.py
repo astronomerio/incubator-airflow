@@ -2810,6 +2810,7 @@ def lazy_add_provider_discovered_options_to_connection_form():
         choices=sorted(_get_connection_types(), key=itemgetter(1)),
         widget=Select2Widget(),
         validators=[InputRequired()],
+        description="connTypeDesc",
     )
     for key, value in ProvidersManager().connection_form_widgets.items():
         setattr(ConnectionForm, key, value.field)

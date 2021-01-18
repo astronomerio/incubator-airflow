@@ -23,4 +23,16 @@
   {{ super() }}
   <script src="{{ url_for_asset('connectionForm.js') }}"></script>
   <script id="field_behaviours" type="text/json">{{ widgets["add"].field_behaviours }}</script>
+  <script>
+    const list = document.getElementsByClassName('help-block');
+    for (let item of list) {
+      if (item.innerHTML.includes('connTypeDesc')) {
+        item.innerHTML = `
+          Note: Some Conn Types require installing a separate provider package.
+          <a href="https://airflow.apache.org/docs/apache-airflow-providers/index.html">See docs</a>
+        `;
+        break;
+      }
+    }
+  </script>
 {% endblock %}
