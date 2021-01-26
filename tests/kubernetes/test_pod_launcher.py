@@ -194,6 +194,10 @@ class TestPodLauncher(unittest.TestCase):
 
 
 class TestPodLauncherHelper(unittest.TestCase):
+    def setUp(self):
+        self.mock_kube_client = mock.Mock()
+        self.pod_launcher = PodLauncher(kube_client=self.mock_kube_client)
+
     def test_convert_to_airflow_pod(self):
         input_pod = k8s.V1Pod(
             metadata=k8s.V1ObjectMeta(

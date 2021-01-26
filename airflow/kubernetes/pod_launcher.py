@@ -203,7 +203,7 @@ class PodLauncher(LoggingMixin):
                 istio_shut_down_initiated = self.istio.handle_istio_proxy(self.read_pod(pod))
         return self._task_status(self.read_pod(pod)), result
 
-    def parse_log_line(self, line: str) -> Tuple[str, str]:
+    def parse_log_line(self, line):
         """
         Parse K8s log line and returns the final state
 
