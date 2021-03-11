@@ -17,22 +17,48 @@
 # under the License.
 #
 
-from typing import Optional, Sequence, Set, Tuple
+import itertools
+from collections import defaultdict
+from typing import Callable, List, Optional, Sequence, Set, Tuple, Type, TypeVar
 
 from flask import current_app, g
 from flask_appbuilder.security.sqla import models as sqla_models
 from flask_appbuilder.security.sqla.manager import SecurityManager
 from flask_appbuilder.security.sqla.models import PermissionView, Role, User
 from sqlalchemy import or_
+from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.orm import joinedload
+from werkzeug.security import pbkdf2_bin
 
 from airflow import models
 from airflow.exceptions import AirflowException
 from airflow.models import DagModel
 from airflow.security import permissions
+from airflow.utils import helpers
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.session import provide_session
 from airflow.www.utils import CustomSQLAInterface
+
+
+def _unique(session, cls, hashfunc, queryfunc, constructor, arg, kw):
+    cache = getattr(session, '_unique_cache', None)
+    if cache is None:
+        session._unique_cache = cache = {}
+
+    key = (cls, hashfunc(*arg, **kw))
+    if key in cache:
+        return cache[key]
+    else:
+        with session.no_autoflush:
+            q = session.query(cls)
+            q = queryfunc(q, *arg, **kw)
+            obj = q.one_or_none()
+            if not obj:
+                obj = constructor(*arg, **kw)
+                session.add(obj)
+        cache[key] = obj
+        return obj
+
 
 EXISTING_ROLES = {
     'Admin',
@@ -170,6 +196,30 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):  # pylint: disable=
                 continue
             view.datamodel = CustomSQLAInterface(view.datamodel.obj)
         self.perms = None
+
+    """
+    def find_role(self, name):
+        return _unique(
+            self.get_session,
+            self.role_model,
+            lambda name: name,
+            lambda query, name: query.filter(self.role_model.name == name),
+            self.role_model,
+            (),
+            {"name": name},
+        )
+
+    def find_permission(self, name):
+        return _unique(
+            self.get_session,
+            self.permission_model,
+            lambda name: name,
+            lambda query, name: query.filter(self.permission_model.name == name),
+            self.permission_model,
+            (),
+            {"name": name},
+        )
+    """
 
     def init_role(self, role_name, perms):
         """
@@ -456,6 +506,113 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):  # pylint: disable=
             self.add_permission_role(role, website_permission)
 
         self.get_session.commit()
+
+    def bulk_sync_permissions(self):
+        # Get all views, permissions, view_menus
+        session = self.get_session
+        nested = session.begin_nested()
+
+        T = TypeVar("T")
+
+        class NameDefaultDict(defaultdict):
+            def __init__(self, cls: Type[T], values: List[T]):
+                self.cls = cls
+                super().__init__(None, {v.name: v for v in values})
+
+            def __missing__(self, key):
+                obj = self.cls(name=key)  # type: ignore
+                session.add(obj)
+                return obj
+
+        perms = NameDefaultDict(self.permission_model, session.query(self.permission_model).all())
+        viewmenus = NameDefaultDict(self.viewmenu_model, session.query(self.viewmenu_model).all())
+
+        all_perm_views = {
+            group: {pvm.permission: pvm for pvm in vals}
+            for group, vals in itertools.groupby(
+                session.query(self.permissionview_model)
+                .order_by(self.permissionview_model.view_menu_id)
+                .all(),
+                lambda pv: pv.view_menu_id,
+            )
+        }
+
+        # Keep track of which perms etc are in use, and when we see it used remove it from this set
+        perms_to_delete = set(perms.values())
+        ## ViewMenu is unhashable, so store dict, not set
+        viewmenus_to_delete = {vm.id: vm for vm in viewmenus.values()}
+
+        # Built up the "desired" set of perm related models
+        for baseview in self.appbuilder.baseviews:
+            vm = viewmenus[baseview.class_permission_name]
+
+            if not vm.id or vm.id not in all_perm_views:
+                # No permissions yet on this view, create them
+                for permission in baseview.base_permissions:
+                    perm_obj = perms[permission]
+                    obj = self.permissionview_model(view_menu=vm, permission=perm_obj)
+                    session.add(obj)
+                # Didn't exist before, nothing to tidy up
+                continue
+
+            # Permissions on this view exist - check for things we need to tidy up (add/delete PVMs)
+            viewmenus_to_delete.pop(vm.id)
+            perm_views = all_perm_views[vm.id]
+            current_perms = set(perm_views.keys())
+
+            desired_perms = {perms[name] for name in baseview.base_permissions}
+
+            # Compare the two sets, and work out what we need to add/delete
+            to_delete = current_perms - desired_perms
+            to_create = desired_perms - current_perms
+
+            for perm in to_create:
+                obj = self.permissionview_model(permission=perm, view_menu=vm)
+                perm_views[perm] = obj
+                session.add(obj)
+            for perm in to_delete:
+                pvm = perm_views.pop(perm)
+                # TODO: cascade to delete this PVM from any roles too!
+                session.delete(pvm)
+
+            perms_to_delete -= {perm for perm in perm_views.keys()}
+
+        # Now walk over airflow.www.auth._used_permissions
+
+        # Deletion order matters, else FK constraints will stop it.
+        # PermissionViewMenu has to be deleted first!
+
+        session.flush()
+
+        # Group in to 100 ids at a time
+        pvm_ids = []
+        vm_ids = []
+        perm_ids = [perm.id for perm in perms_to_delete]
+        for viewmenu in viewmenus_to_delete.values():
+            pvm_ids.extend(pvm.id for pvm in all_perm_views.get(viewmenu.id, {}).values())
+
+            # TODO: Don't delete all the new resource permissions stuff!
+            vm_ids.append(viewmenu.id)
+
+        def delete(model, id_chunk):
+            session.query(model).filter(model.id.in_(id_chunk)).delete(synchronize_session=False)
+            return model
+
+        association_table = self.permissionview_model.role.property.secondary
+
+        def delete_m2m_rows(_, pvm_ids):
+            session.execute(
+                association_table.delete().where(association_table.c.permission_view_id.in_(pvm_ids))
+            )
+
+        helpers.reduce_in_chunks(delete_m2m_rows, pvm_ids, None, 100)
+        helpers.reduce_in_chunks(delete, pvm_ids, self.permissionview_model, 100)
+        helpers.reduce_in_chunks(delete, vm_ids, self.viewmenu_model, 100)
+        helpers.reduce_in_chunks(delete, perm_ids, self.permission_model, 100)
+
+        nested.commit()
+        session.rollback()
+        ...
 
     def get_all_permissions(self):
         """Returns all permissions as a set of tuples with the perm name and view menu name"""

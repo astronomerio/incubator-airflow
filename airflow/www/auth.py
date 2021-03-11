@@ -22,9 +22,12 @@ from flask import current_app, flash, redirect, request, url_for
 
 T = TypeVar("T", bound=Callable)  # pylint: disable=invalid-name
 
+_used_permissions = set()
+
 
 def has_access(permissions: Optional[Sequence[Tuple[str, str]]] = None) -> Callable[[T], T]:
     """Factory for decorator that checks current user's permissions against required permissions."""
+    _used_permissions.update(permissions)  # type: ignore
 
     def requires_access_decorator(func: T):
         @wraps(func)
