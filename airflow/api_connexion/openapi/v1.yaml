@@ -1525,8 +1525,6 @@ paths:
                 $ref: '#/components/schemas/JwtToken'
 
   /auth_oauth/{provider}:
-    parameters:
-      - $ref: '#/components/parameters/OauthProvider'
     get:
       summary: Login user using oauth
       x-openapi-router-controller: airflow.api_connexion.endpoints.auth_endpoint
@@ -1534,6 +1532,31 @@ paths:
       tags: [Auth]
       parameters:
         - $ref: '#/components/parameters/ShouldRegister'
+        - $ref: '#/components/parameters/OauthProvider'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_url:
+                    type: string
+  /oauth-authorized/{provider}:
+    parameters:
+      - $ref: '#/components/parameters/OauthProvider'
+    get:
+      summary: Oauth authorization redirect
+      x-openapi-router-controller: airflow.api_connexion.endpoints.auth_endpoint
+      operationId: authorize_oauth
+      tags: [Auth]
+      parameters:
+        - $ref: '#/components/parameters/AuthScope'
+        - $ref: '#/components/parameters/AuthState'
+        - $ref: '#/components/parameters/AuthPrompt'
+        - $ref: '#/components/parameters/AuthUser'
+        - $ref: '#/components/parameters/AuthCode'
       responses:
         '200':
           description: Success.
@@ -3257,7 +3280,7 @@ components:
       description:
         The value can be repeated to retrieve multiple matching values (OR condition).
 
-    # Other parameters
+    # Auth parameters
     OauthProvider:
       in: path
       name: provider
@@ -3265,7 +3288,41 @@ components:
         type: string
       required: true
       description: The name of the provider to authenticate
-
+    AuthUser:
+      in: query
+      name: authuser
+      schema:
+        type: string
+      required: true
+      description: The authuser from provider
+    AuthScope:
+      in: query
+      name: scope
+      schema:
+        type: string
+      required: true
+      description: The auth scope from provider
+    AuthPrompt:
+      in: query
+      name: prompt
+      schema:
+        type: string
+      required: true
+      description: The auth prompt from provider
+    AuthState:
+      in: query
+      name: state
+      schema:
+        type: string
+      required: true
+      description: The auth state from provider
+    AuthCode:
+      in: query
+      name: code
+      schema:
+        type: string
+      required: true
+      description: The auth code from provider
     ShouldRegister:
       in: query
       name: register
@@ -3274,6 +3331,7 @@ components:
       required: false
       description: Whether to register user
 
+    # Other parameters
     FileToken:
       in: path
       name: file_token
