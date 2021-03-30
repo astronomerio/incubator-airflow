@@ -59,6 +59,14 @@ const AuthProvider = ({ children }: Props): ReactElement => {
   );
 
   useEffect(() => {
+    const getAuthInfo = async () => {
+      const authInfo = await axios.get(`${process.env.WEBSERVER_URL}/api/v1/auth-info`);
+      console.log(authInfo);
+    };
+    getAuthInfo();
+  }, []);
+
+  useEffect(() => {
     const token = get('token');
     const isExpired = checkExpire('token');
     if (token && !isExpired) {
@@ -79,16 +87,19 @@ const AuthProvider = ({ children }: Props): ReactElement => {
     setLoading(true);
     setError(null);
     try {
-      const authorization = `Basic ${btoa(`${username}:${password}`)}`;
-      await axios.get(`${process.env.WEBSERVER_URL}/api/v1/config`, {
-        headers: {
-          Authorization: authorization,
-        },
+      // const authorization = `Basic ${btoa(`${username}:${password}`)}`;
+      const authResponse = await axios.post(`${process.env.WEBSERVER_URL}/api/v1/auth/login`, {
+        password,
+        username,
+        // headers: {
+        //   Authorization: authorization,
+        // },
       });
-      set('token', authorization);
-      axios.defaults.headers.common.Authorization = authorization;
+      console.log(authResponse);
+      // set('token', authorization);
+      // axios.defaults.headers.common.Authorization = authorization;
       setLoading(false);
-      setHasValidAuthToken(true);
+      // setHasValidAuthToken(true);
     } catch (e) {
       setLoading(false);
       setError(e);
