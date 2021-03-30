@@ -87,19 +87,19 @@ const AuthProvider = ({ children }: Props): ReactElement => {
     setLoading(true);
     setError(null);
     try {
-      // const authorization = `Basic ${btoa(`${username}:${password}`)}`;
       const authResponse = await axios.post(`${process.env.WEBSERVER_URL}/api/v1/auth/login`, {
         password,
         username,
-        // headers: {
-        //   Authorization: authorization,
-        // },
       });
-      console.log(authResponse);
-      // set('token', authorization);
-      // axios.defaults.headers.common.Authorization = authorization;
       setLoading(false);
-      // setHasValidAuthToken(true);
+      if ((authResponse as any).token) {
+        set('token', (authResponse as any).token);
+        axios.defaults.headers.common.Authorization = `Bearer ${(authResponse as any).token}`;
+        setHasValidAuthToken(true);
+      } else {
+        const error = new Error('Something went wrong, please try again');
+        setError(error);
+      }
     } catch (e) {
       setLoading(false);
       setError(e);
