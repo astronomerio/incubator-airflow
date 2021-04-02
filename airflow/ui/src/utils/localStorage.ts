@@ -19,13 +19,6 @@
 
 export function set(key: string, value:string): Record<string, unknown> {
   localStorage[key] = value;
-
-  // Set session expiry (24hrs)
-  if (key === 'token') {
-    const date = new Date();
-    localStorage[`${key}-expire`] = new Date(date.getTime() + 86400000);
-  }
-
   return localStorage[key];
 }
 
@@ -42,14 +35,6 @@ export function remove(key: string): void {
   return localStorage.removeItem(key);
 }
 
-export function checkExpire(key: string): boolean {
-  const sessExpire = get(`${key}-expire`);
-  const sess = get(key);
-  if (!sessExpire || !sess) return true;
-  return new Date() > new Date(sessExpire);
-}
-
 export function clearAuth(): void {
-  localStorage.removeItem('token');
-  localStorage.removeItem('token-expire');
+  localStorage.removeItem('auth');
 }

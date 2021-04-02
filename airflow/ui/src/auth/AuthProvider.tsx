@@ -20,11 +20,12 @@
 import React, {
   useState, useEffect, useCallback, ReactNode, ReactElement,
 } from 'react';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { useQueryClient } from 'react-query';
 
+import type { User } from 'interfaces';
 import {
-  checkExpire, clearAuth, get, set,
+  clearAuth, get, set,
 } from 'utils/localStorage';
 import { AuthContext } from './context';
 
@@ -32,14 +33,22 @@ type Props = {
   children: ReactNode;
 };
 
+interface RefreshResponse extends AxiosResponse { accessToken?: string }
+
+interface AuthResponse extends AxiosResponse {
+  user?: User;
+  refreshToken?: string;
+  token?: string
+}
+
 const AuthProvider = ({ children }: Props): ReactElement => {
-  const [hasValidAuthToken, setHasValidAuthToken] = useState(false);
+  const [user, setUser] = useState<User | undefined>();
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
 
   const clearData = useCallback(() => {
-    setHasValidAuthToken(false);
+    setUser(undefined);
     clearAuth();
     queryClient.clear();
     axios.defaults.headers.common.Authorization = null;
@@ -47,58 +56,70 @@ const AuthProvider = ({ children }: Props): ReactElement => {
 
   const logout = () => clearData();
 
-  // intercept responses and logout on unauthorized error
+  /*
+    * If it is an unauthorized error we will try once to refresh the accessToken,
+    * then on success, redo the original request. If not, logout.
+  */
   axios.interceptors.response.use(
     (res) => res,
-    (err) => {
-      if (err && err.response && err.response.status === 401) {
-        logout();
+    async (err) => {
+      const originalRequest = err.config;
+      if (err.response && err.response.status) {
+        if (err.response.status === 401 && originalRequest.url === '/refresh') {
+          logout();
+          return Promise.reject(err);
+        }
+
+        if (err.response.status === 401 && !originalRequest.retry && originalRequest.url !== '/auth/login') {
+          originalRequest.retry = true;
+          const auth = JSON.parse(get('auth'));
+          const { accessToken }: RefreshResponse = await axios.post('/refresh', null, { headers: { Authorization: `Bearer ${auth.refreshToken}` } });
+          if (accessToken) {
+            set('auth', JSON.stringify({
+              ...auth,
+              token: accessToken,
+            }));
+            axios.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+            return axios(originalRequest);
+          }
+        }
       }
       return Promise.reject(err);
     },
   );
 
   useEffect(() => {
-    const getAuthInfo = async () => {
-      const authInfo = await axios.get(`${process.env.WEBSERVER_URL}/api/v1/auth-info`);
-      console.log(authInfo);
-    };
-    getAuthInfo();
-  }, []);
-
-  useEffect(() => {
-    const token = get('token');
-    const isExpired = checkExpire('token');
-    if (token && !isExpired) {
-      axios.defaults.headers.common.Authorization = token;
-      setHasValidAuthToken(true);
-    } else if (token) {
+    let auth;
+    try {
+      auth = JSON.parse(get('auth'));
+    } catch (e) {
       clearData();
-      setError(new Error('Token invalid, please reauthenticate.'));
+    }
+    if (auth && auth.token) {
+      axios.defaults.headers.common.Authorization = `Bearer ${auth.token}`;
+      setUser(auth.user);
     } else {
-      setHasValidAuthToken(false);
+      clearData();
     }
     setLoading(false);
   }, [clearData]);
 
   // Login with basic auth.
-  // There is no actual auth endpoint yet, so we check against a generic endpoint
   const login = async (username: string, password: string) => {
     setLoading(true);
     setError(null);
     try {
-      const authResponse = await axios.post(`${process.env.WEBSERVER_URL}/api/v1/auth/login`, {
+      const authResponse: AuthResponse = await axios.post(`${process.env.WEBSERVER_URL}/api/v1/auth/login`, {
         password,
         username,
       });
       setLoading(false);
-      if ((authResponse as any).token) {
-        set('token', (authResponse as any).token);
-        axios.defaults.headers.common.Authorization = `Bearer ${(authResponse as any).token}`;
-        setHasValidAuthToken(true);
+      if (authResponse.token) {
+        set('auth', JSON.stringify(authResponse));
+        axios.defaults.headers.common.Authorization = `Bearer ${authResponse.token}`;
+        setUser(authResponse.user);
       } else {
-        const error = new Error('Something went wrong, please try again');
-        setError(error);
+        setError(new Error('Something went wrong, please try again'));
       }
     } catch (e) {
       setLoading(false);
@@ -109,7 +130,7 @@ const AuthProvider = ({ children }: Props): ReactElement => {
   return (
     <AuthContext.Provider
       value={{
-        hasValidAuthToken,
+        user,
         logout,
         login,
         loading,

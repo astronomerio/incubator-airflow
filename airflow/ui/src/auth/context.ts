@@ -17,13 +17,13 @@
  * under the License.
  */
 
+import type { User } from 'interfaces';
 import {
   createContext, useContext,
 } from 'react';
 
-// todo: eventually replace hasValidAuthToken with a user object
 interface AuthContextData {
-  hasValidAuthToken: boolean;
+  user: User | undefined;
   login: (username: string, password: string) => void;
   logout: () => void;
   loading: boolean;
@@ -31,7 +31,7 @@ interface AuthContextData {
 }
 
 export const authContextDefaultValue: AuthContextData = {
-  hasValidAuthToken: false,
+  user: undefined,
   login: () => null,
   logout: () => null,
   loading: true,

@@ -99,3 +99,5 @@ export interface Version {
   version: string,
   gitVersion: string,
 }
+
+export type User = Record<string, any>;

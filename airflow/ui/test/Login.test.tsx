@@ -108,8 +108,8 @@ describe('test login component', () => {
     nock(url)
       .persist()
       .defaultReplyHeaders(defaultHeaders)
-      .intercept('/config', 'GET')
-      .replyWithError('Unauthorized');
+      .intercept('/auth/login', 'POST')
+      .replyWithError('User not found');
 
     const { getByTestId, getByText } = render(
       <BrowserRouter>
@@ -127,6 +127,6 @@ describe('test login component', () => {
     fireEvent.change(username, { target: { value: 'admin' } });
     fireEvent.change(password, { target: { value: 'admin' } });
     fireEvent.click(button);
-    await waitFor(() => expect(getByText('Unauthorized')).toBeInTheDocument());
+    await waitFor(() => expect(getByText('User not found')).toBeInTheDocument());
   });
 });

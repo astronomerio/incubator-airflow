@@ -26,8 +26,8 @@ import Login from 'views/Login';
 import { useAuthContext } from './context';
 
 const PrivateRoute: FC<RouteProps> = (props) => {
-  const { hasValidAuthToken } = useAuthContext();
-  return hasValidAuthToken ? <Route {...props} /> : <Login />;
+  const { user } = useAuthContext();
+  return user ? <Route {...props} /> : <Login />;
 };
 
 export default PrivateRoute;

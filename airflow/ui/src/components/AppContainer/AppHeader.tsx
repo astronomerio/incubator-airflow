@@ -56,7 +56,7 @@ const AppHeader: React.FC<Props> = ({ bodyBg, overlayBg, breadcrumb }) => {
   const { toggleColorMode } = useColorMode();
   const now = dayjs();
   const headerHeight = '56px';
-  const { hasValidAuthToken, logout } = useAuthContext();
+  const { user, logout } = useAuthContext();
   const darkLightIcon = useColorModeValue(MdBrightness2, MdWbSunny);
   const darkLightText = useColorModeValue(' Dark ', ' Light ');
 
@@ -86,7 +86,7 @@ const AppHeader: React.FC<Props> = ({ bodyBg, overlayBg, breadcrumb }) => {
           <ApacheAirflowLogo />
         </Link>
       )}
-      {hasValidAuthToken && (
+      {!!user && (
         <Flex align="center">
           <Tooltip label="Change time zone" hasArrow>
             {/* TODO: open modal for time zone update */}

@@ -40,7 +40,7 @@ interface Props {
 }
 
 const AppNav: React.FC<Props> = ({ bodyBg, overlayBg }) => {
-  const { hasValidAuthToken } = useAuthContext();
+  const { user } = useAuthContext();
 
   const navItems = [
     {
@@ -101,7 +101,7 @@ const AppNav: React.FC<Props> = ({ bodyBg, overlayBg }) => {
       >
         <PinwheelLogo />
       </Box>
-      {hasValidAuthToken && navItems.map((item) => (
+      {!!user && navItems.map((item) => (
         <AppNavBtn key={item.label} navItem={item} />
       ))}
     </Box>
