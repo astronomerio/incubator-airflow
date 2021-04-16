@@ -26,6 +26,7 @@ import functools
 import json
 import multiprocessing
 import time
+from datetime import datetime
 from queue import Empty, Queue  # pylint: disable=unused-import
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -47,6 +48,7 @@ from airflow.kubernetes.pod_generator import PodGenerator
 from airflow.models import TaskInstance
 from airflow.models.taskinstance import TaskInstanceKey
 from airflow.settings import pod_mutation_hook
+from airflow.utils import timezone
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.session import provide_session
 from airflow.utils.state import State
@@ -146,6 +148,7 @@ class KubernetesJobWatcher(multiprocessing.Process, LoggingMixin):
         for event in list_worker_pods():
             task = event['object']
             self.log.info('Event: %s had an event of type %s', task.metadata.name, event['type'])
+            self.log.info(task)
             if event['type'] == 'ERROR':
                 return self.process_error(event)
             annotations = task.metadata.annotations
@@ -160,9 +163,11 @@ class KubernetesJobWatcher(multiprocessing.Process, LoggingMixin):
                 pod_id=task.metadata.name,
                 namespace=task.metadata.namespace,
                 status=task.status.phase,
+                start_time=task.status.start_time,
                 annotations=task_instance_related_annotations,
                 resource_version=task.metadata.resource_version,
                 event=event,
+                kube_client=kube_client,
             )
             last_resource_version = task.metadata.resource_version
 
@@ -190,13 +195,21 @@ class KubernetesJobWatcher(multiprocessing.Process, LoggingMixin):
         status: str,
         annotations: Dict[str, str],
         resource_version: str,
+        start_time: datetime,
         event: Any,
+        kube_client,
     ) -> None:
         """Process status response"""
         if status == 'Pending':
+            self.log.info("Event type is %s", event['type'])
             if event['type'] == 'DELETED':
                 self.log.info('Event: Failed to start pod %s', pod_id)
                 self.watcher_queue.put((pod_id, namespace, State.FAILED, annotations, resource_version))
+            if event['type'] == 'MODIFIED':
+                if (timezone.utcnow() - start_time).total_seconds() > 300:
+                    self.log.info("Event: The pod %s timed out waiting to start", pod_id)
+                    self.watcher_queue.put((pod_id, namespace, State.FAILED, annotations, resource_version))
+                    self._delete_pod(kube_client, pod=pod_id, namespace=namespace)
             else:
                 self.log.info('Event: %s Pending', pod_id)
         elif status == 'Failed':
@@ -217,6 +230,18 @@ class KubernetesJobWatcher(multiprocessing.Process, LoggingMixin):
                 annotations,
                 resource_version,
             )
+
+    def _delete_pod(self, kube_client, pod: str, namespace: str):
+        try:
+            self.log.debug("Deleting pod %s in namespace %s", pod, namespace)
+            kube_client.delete_namespaced_pod(
+                pod,
+                namespace,
+                body=client.V1DeleteOptions(**self.kube_config.delete_option_kwargs),
+                **self.kube_config.kube_client_request_args,
+            )
+        except ApiException as e:
+            print(f"Exception when calling CoreV1Api->delete_namespaced_pod: {e}\n")
 
 
 class AirflowKubernetesScheduler(LoggingMixin):
