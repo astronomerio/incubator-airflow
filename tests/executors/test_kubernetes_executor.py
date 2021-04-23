@@ -37,6 +37,7 @@ try:
         AirflowKubernetesScheduler,
         KubernetesExecutor,
         KubernetesJobWatcher,
+        ResourceVersion,
         create_pod_id,
         get_base_pod_from_template,
     )
@@ -762,16 +763,18 @@ class TestKubernetesJobWatcher(unittest.TestCase):
         self._run()
         self.watcher.watcher_queue.put.assert_not_called()
 
+    @mock.patch('airflow.executors.kubernetes_executor.get_resource_version')
     @mock.patch.object(KubernetesJobWatcher, 'process_error')
-    def test_process_error_event_for_410(self, mock_process_error):
+    def test_process_error_event_for_410(self, mock_process_error, mock_get_resource_version):
+        mock_get_resource_version.return_value = '43334'
         message = "too old resource version: 27272 (43334)"
         self.pod.status.phase = 'Pending'
-        self.pod.metadata.resource_version = '0'
-        mock_process_error.return_value = '0'
+        self.pod.metadata.resource_version = '43334'
         raw_object = {"code": 410, "message": message}
         self.events.append({"type": "ERROR", "object": self.pod, "raw_object": raw_object})
         self._run()
         mock_process_error.assert_called_once_with(self.events[0])
+        assert mock_get_resource_version.called
 
     def test_process_error_event_for_raise_if_not_410(self):
         message = "Failure message"
@@ -785,3 +788,28 @@ class TestKubernetesJobWatcher(unittest.TestCase):
             raw_object['code'],
             raw_object['message'],
         )
+
+class TestResourceVersion(unittest.TestCase):
+    # pylint: disable=no-member
+    def tearDown(self) -> None:
+        ResourceVersion._drop()
+
+    def test_can_update_with_resource_version_arg(self):
+        resource_instance = ResourceVersion(resource_version='4567')
+        assert resource_instance.resource_version == '4567'
+
+    @mock.patch('airflow.executors.kubernetes_executor.get_resource_version')
+    def test_different_instance_share_state(self, mock_get_resource_version):
+        kube_client = mock.MagicMock()
+        mock_get_resource_version.return_value = '4566'
+        resource_instance = ResourceVersion(kube_client=kube_client, namespace='mynamespace')
+        resource_instance2 = ResourceVersion(kube_client=kube_client, namespace='mynamespace')
+
+        assert resource_instance.resource_version == '4566'
+        assert resource_instance2.resource_version == '4566'
+        resource_instance3 = ResourceVersion(resource_version='6787')
+        resource_instance4 = ResourceVersion(kube_client=kube_client, namespace='mynamespace')
+        assert resource_instance.resource_version == '6787'
+        assert resource_instance2.resource_version == '6787'
+        assert resource_instance3.resource_version == '6787'
+        assert resource_instance4.resource_version == '6787'
