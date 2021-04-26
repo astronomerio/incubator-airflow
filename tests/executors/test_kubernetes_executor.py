@@ -40,6 +40,7 @@ try:
         ResourceVersion,
         create_pod_id,
         get_base_pod_from_template,
+        get_latest_resource_version,
     )
     from airflow.kubernetes import pod_generator
     from airflow.kubernetes.kubernetes_helper_functions import annotations_to_key
@@ -763,7 +764,7 @@ class TestKubernetesJobWatcher(unittest.TestCase):
         self._run()
         self.watcher.watcher_queue.put.assert_not_called()
 
-    @mock.patch('airflow.executors.kubernetes_executor.get_resource_version')
+    @mock.patch('airflow.executors.kubernetes_executor.get_latest_resource_version')
     @mock.patch.object(KubernetesJobWatcher, 'process_error')
     def test_process_error_event_for_410(self, mock_process_error, mock_get_resource_version):
         mock_get_resource_version.return_value = '43334'
@@ -798,7 +799,7 @@ class TestResourceVersion(unittest.TestCase):
         resource_instance = ResourceVersion(resource_version='4567')
         assert resource_instance.resource_version == '4567'
 
-    @mock.patch('airflow.executors.kubernetes_executor.get_resource_version')
+    @mock.patch('airflow.executors.kubernetes_executor.get_latest_resource_version')
     def test_different_instance_share_state(self, mock_get_resource_version):
         kube_client = mock.MagicMock()
         mock_get_resource_version.return_value = '4566'
@@ -813,3 +814,13 @@ class TestResourceVersion(unittest.TestCase):
         assert resource_instance2.resource_version == '6787'
         assert resource_instance3.resource_version == '6787'
         assert resource_instance4.resource_version == '6787'
+
+
+class TestGetLatestResourceVersion(unittest.TestCase):
+    def test_get_latest_resource_version(self):
+        kube_client = mock.MagicMock()
+        list_namespaced_pod = kube_client.list_namespaced_pod
+        list_namespaced_pod.return_value.metadata.resource_version = '5688'
+        resource_version = get_latest_resource_version(kube_client, 'mynamespace')
+        assert list_namespaced_pod.called
+        assert resource_version == '5688'
