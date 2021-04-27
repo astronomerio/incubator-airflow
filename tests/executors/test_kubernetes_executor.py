@@ -790,6 +790,21 @@ class TestKubernetesJobWatcher(unittest.TestCase):
             raw_object['message'],
         )
 
+    @mock.patch('airflow.executors.kubernetes_executor.get_latest_resource_version')
+    @mock.patch.object(KubernetesJobWatcher, '_run')
+    def test_apiexception_for_410_is_handled(self, mock_run, mock_get_resource_version):
+        self.events.append({"type": 'MODIFIED', "object": self.pod})
+        mock_run.side_effect = mock.Mock(side_effect=ApiException(status=410, reason='too old error'))
+        with self.assertRaises(ApiException):
+            self.watcher._run(
+                kube_client=self.kube_client,
+                resource_version=self.watcher.resource_version,
+                scheduler_job_id=self.watcher.scheduler_job_id,
+                kube_config=self.watcher.kube_config,
+            )
+            mock_get_resource_version.assert_called_once()
+
+
 class TestResourceVersion(unittest.TestCase):
     # pylint: disable=no-member
     def tearDown(self) -> None:
