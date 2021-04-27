@@ -775,7 +775,7 @@ class TestKubernetesJobWatcher(unittest.TestCase):
         self.events.append({"type": "ERROR", "object": self.pod, "raw_object": raw_object})
         self._run()
         mock_process_error.assert_called_once_with(self.events[0])
-        assert mock_get_resource_version.called
+        mock_get_resource_version.assert_called_once()
 
     def test_process_error_event_for_raise_if_not_410(self):
         message = "Failure message"
@@ -805,7 +805,6 @@ class TestResourceVersion(unittest.TestCase):
         mock_get_resource_version.return_value = '4566'
         resource_instance = ResourceVersion(kube_client=kube_client, namespace='mynamespace')
         resource_instance2 = ResourceVersion(kube_client=kube_client, namespace='mynamespace')
-
         assert resource_instance.resource_version == '4566'
         assert resource_instance2.resource_version == '4566'
         resource_instance3 = ResourceVersion(resource_version='6787')
@@ -814,6 +813,7 @@ class TestResourceVersion(unittest.TestCase):
         assert resource_instance2.resource_version == '6787'
         assert resource_instance3.resource_version == '6787'
         assert resource_instance4.resource_version == '6787'
+        mock_get_resource_version.assert_called_once()
 
 
 class TestGetLatestResourceVersion(unittest.TestCase):
