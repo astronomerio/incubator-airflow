@@ -765,8 +765,7 @@ class TestKubernetesJobWatcher(unittest.TestCase):
         self.watcher.watcher_queue.put.assert_not_called()
 
     @mock.patch('airflow.executors.kubernetes_executor.get_latest_resource_version')
-    @mock.patch.object(KubernetesJobWatcher, 'process_error')
-    def test_process_error_event_for_410(self, mock_process_error, mock_get_resource_version):
+    def test_process_error_event_for_410(self, mock_get_resource_version):
         mock_get_resource_version.return_value = '43334'
         message = "too old resource version: 27272 (43334)"
         self.pod.status.phase = 'Pending'
@@ -774,10 +773,9 @@ class TestKubernetesJobWatcher(unittest.TestCase):
         raw_object = {"code": 410, "message": message}
         self.events.append({"type": "ERROR", "object": self.pod, "raw_object": raw_object})
         self._run()
-        mock_process_error.assert_called_once_with(self.events[0])
         mock_get_resource_version.assert_called_once()
 
-    def test_process_error_event_for_raise_if_not_410(self):
+    def test_process_error_event_raise_if_not_410(self):
         message = "Failure message"
         self.pod.status.phase = 'Pending'
         raw_object = {"code": 422, "message": message, "reason": "Test"}
