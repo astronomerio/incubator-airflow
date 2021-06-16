@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 DEFAULT_SENSITIVE_FIELDS = frozenset(
     {
         'access_token',
+        'token',
         'api_key',
         'apikey',
         'authorization',
