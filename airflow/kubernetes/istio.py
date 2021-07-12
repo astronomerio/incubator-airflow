@@ -54,7 +54,10 @@ class Istio(LoggingMixin):
                 "pod name: %s",
                 pod.metadata.name,
             )
-            self._shutdown_istio_proxy(pod)
+            try:
+                self._shutdown_istio_proxy(pod)
+            except Exception:  # pylint: disable=broad-except
+                self.log.debug("Error handling Istio container for pod: %s", pod.metadata.name)
             return True
         return False
 
