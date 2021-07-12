@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 from packaging.version import parse as semantic_version
 
@@ -56,7 +57,7 @@ class Istio(LoggingMixin):
             )
             try:
                 self._shutdown_istio_proxy(pod)
-            except Exception:  # pylint: disable=broad-except
+            except ApiException:
                 self.log.debug("Error handling Istio container for pod: %s", pod.metadata.name)
             return True
         return False
